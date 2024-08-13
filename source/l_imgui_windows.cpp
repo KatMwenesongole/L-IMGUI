@@ -11,15 +11,14 @@
 #include "p:/shared/shared_keymap.cpp"
 #include "p:/shared/shared_keymap_windows.cpp"
 
-
 global b32 running;
 global s32 window_width;
 global s32 window_height;
 
 #include "p:/shared/shared_graphics_2d.cpp"
-#include "p:/shared/shared_imgui.cpp"
 
-#include "imgui.cpp"
+#include "l_imgui.cpp"
+#include "l_imgui_test.cpp"
 
 LRESULT WINAPI
 windows_messageproc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)

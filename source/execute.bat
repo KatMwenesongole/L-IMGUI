@@ -1,2 +1,2 @@
 @echo off
-i:/build/imgui.exe
+p:/L-IMGUI/build/L-IMGUI" "^(windows^).exe
