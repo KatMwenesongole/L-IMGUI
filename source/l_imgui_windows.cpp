@@ -167,10 +167,7 @@ WinMain (HINSTANCE instance,
 
 		    // //
 
-
 		    imgui_update(&primitive, &imgui);
-		    
-		    
 
 		    // //
 		    
