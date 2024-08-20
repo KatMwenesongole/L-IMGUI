@@ -1,10 +1,17 @@
 //
+// CONFIRM - ENTER
+// DRAG    - RIGHT MOUSE (HOLD DOWN)
+// SELECT  - LEFT  MOUSE (CLICK) 
+//
+
+//
 // INCOMPLETE!
 //
 
 // needs:
 // shared/shared_keymap.cpp
 // shared/shared_graphics_2d.cpp
+//
 
 #define IMGUI_MAX_FIELD_SIZE 256 
 
@@ -23,10 +30,8 @@ struct imgui_item
     r32 width;
     r32 height;
     
-    //r32 child_x;
     r32 child_y;
 };
-
 struct imgui_theme
 {
     r32 bar_width;
@@ -94,7 +99,6 @@ imgui_initialise(imgui_state* imgui, void* region_base, s32 region_size, render_
 
     imgui->root = (imgui_item*)imgui->region_base;
 }
-
 
 internal imgui_item*
 imgui_finditem(imgui_state* imgui, u32 hash)
@@ -171,64 +175,25 @@ imgui_set_active(imgui_state* imgui, imgui_item* item)
 internal void
 imgui_mousestate(imgui_state* imgui, rect region, b32* pressed, b32* touched, b32* grabbing)
 {
-    if(touched) *touched = false;
-    
     r32 x = imgui->keymap->mouse_position.x;
     r32 y = imgui->keymap->mouse_position.y;
     
     if((x > region.x0 && x < region.x1) &&
        (y > region.y0 && y < region.y1))
     {
-	if(touched) *touched = true;
-	if(imgui->keymap->actions[ACTION_LMOUSE].pressed) if(pressed)  *pressed  = true;
-	if(imgui->keymap->actions[ACTION_RMOUSE].holding) if(grabbing) *grabbing = true;
+	if(imgui->keymap->actions[ACTION_LMOUSE].pressed)
+	{
+	    *pressed  = true;
+	}
+	else if(imgui->keymap->actions[ACTION_RMOUSE].holding)
+	{
+	    *grabbing = true;
+	}
+	else
+	{
+	    *touched = true;
+	}
     }
-}
-
-internal v3
-imgui_colourcalc(r32 hue, r32 saturation, r32 value, v3* base_colour)
-{
-    //note: outer circle (hsv -> rgb)
-    r32 h = ((hue/TAU) * TAU)/(TAU/6);
-    
-    r32 c = saturation * (1 - value);
-    r32 z = c * (1 - fabs((fmod(h, 2) - 1)));
-    r32 m = (1 - value) - c;
-
-    r32 x = 1 - fabs(fmod(h,2) - 1);
-
-    v3 colour = {};
-    if(h < 1)
-    {
-	colour       = { c + m, z + m, m };
-	*base_colour = { 1.0, x, 0.0 };
-    }
-    else if(h < 2)
-    {
-	colour       = { z + m, c + m, m };
-	*base_colour = { x, 1.0, 0.0 };
-    }
-    else if(h < 3)
-    {
-	colour       = { m, c + m, z + m };
-	*base_colour = { 0.0, 1.0, x };
-    }
-    else if(h < 4)
-    {
-	colour       = { m, z + m, c + m };
-	*base_colour = { 0.0, x, 1.0 };
-    }
-    else if(h < 5)
-    {
-	colour       = { z + m, m, c + m };
-	*base_colour = { x, 0.0, 1.0 };
-    }
-    else
-    {
-	colour       = { c + m, m, z + m };
-	*base_colour = { 1.0, 0.0, x };
-    }
-    return(colour);
 }
 
 imgui_item* imgui_updateitem(imgui_state* imgui, imgui_item* parent, string label, r32 x, r32 y, r32 width, r32 height)
@@ -245,13 +210,12 @@ imgui_item* imgui_updateitem(imgui_state* imgui, imgui_item* parent, string labe
 	item->parent = parent;
 
 	imgui->item_count++;
-    }
-    
-    item->x      = x;
-    item->y      = y;
-    item->width  = width;
-    item->height = height;
 
+	item->x      = x;
+	item->y      = y;
+	item->width  = width;
+	item->height = height;
+    }
     item->child_y = item->y + item->height;
     
     return(item);
@@ -267,13 +231,32 @@ b32 imgui_title(imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width, r
     imgui_mousestate(imgui, item_rect, &pressed, &touched, &grabbed); // check interaction.
 
     v3 background_colour = imgui->theme.colour;
-    
+
     if(touched)
     {
 	background_colour = calc_brighten(background_colour, 0.5);
     }
-    
-    if(pressed)
+    else if(grabbed && !item->parent)
+    {
+	local r32 grab_x = imgui->keymap->mouse_position.x;
+	local r32 grab_y = imgui->keymap->mouse_position.y;
+
+	r32 dx = imgui->keymap->mouse_position.x - grab_x;
+	r32 dy = imgui->keymap->mouse_position.y - grab_y;
+	
+	grab_x = imgui->keymap->mouse_position.x;
+	grab_y = imgui->keymap->mouse_position.y;
+
+	item->x += dx;
+	item->y += dy;
+	item->child_y = item->y + item->height;
+	
+	item_rect =
+	{
+	    x + dx, y + dy, x + width + dx, y + height + dy 
+	};
+    }
+    else if(pressed)
     {
 	if(item->active) imgui_set_deactive(imgui, item);  // de-activate, active, pressed 
 	else             imgui_set_active  (imgui, item);   //    activate, not active, pressed 
@@ -305,7 +288,10 @@ b32 imgui_title(imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width, r
 }
 void imgui_advance(imgui_state* imgui, r32 y)
 {
-    imgui->current_item->child_y += y;
+    if(imgui->current_item)
+    {
+	imgui->current_item->child_y += y;
+    }
 }
 
 void nest(imgui_state* imgui, string label) 
@@ -542,6 +528,12 @@ imgui_item* imgui_x32   (imgui_state* imgui, imgui_item* parent, b32 enabled, r3
 {
     imgui_item* item = imgui_updateitem(imgui, parent, label, x, y, width, height);
 
+    if(item->parent)
+    {
+	item->x = x;
+	item->y = y;
+    }
+
     //title:
     imgui_title(imgui, item, item->x, item->y, item->width, item->height, label);
 
@@ -577,7 +569,14 @@ b32  imgui_label (imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 {
     imgui_item* item = imgui_updateitem(imgui, parent, label, x, y, width, height);
     
+    if(item->parent)
+    {
+	item->x = x;
+	item->y = y;
+    }
+    
     imgui_title(imgui, item, item->x, item->y, item->width, item->height, label); // title.
+    
     if(item->parent)
     {
 	imgui_advance(imgui, item->height);
@@ -587,9 +586,16 @@ b32  imgui_label (imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 b32  imgui_button(imgui_state* imgui, imgui_item* parent, string label, r32 x, r32 y, r32 width, r32 height) 
 {
     b32 pressed = false;
-    
+       
     imgui_item* item = imgui_updateitem(imgui, parent, label, x, y, width, height);
+    if(item->parent)
+    {
+	item->x = x;
+	item->y = y;
+    }
+    
     pressed = imgui_title(imgui, item, item->x, item->y, item->width, item->height, label); // title.
+    
     item->active = false;
     if(item->parent)
     {
@@ -600,6 +606,11 @@ b32  imgui_button(imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 b32  imgui_bool  (imgui_state* imgui, imgui_item* parent, string label, r32 x, r32 y, r32 width, r32 height, b32* boolean)
 {
     imgui_item* item = imgui_updateitem(imgui, imgui->current_item, label, x, y, width, height);
+    if(item->parent)
+    {
+	item->x = x;
+	item->y = y;
+    }
     b32 pressed = false;
     pressed = imgui_title(imgui, item, item->x, item->y, item->width, item->height, label); // title.
     if(pressed) *boolean = !(*boolean);
@@ -617,6 +628,11 @@ b32  imgui_bool  (imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 b32  imgui_colour(imgui_state* imgui, imgui_item* parent, string label, r32 x, r32 y, r32 width, r32 height, v4* vec)
 {
     imgui_item* item = imgui_updateitem(imgui, parent, label, x, y, width, height);
+    if(item->parent)
+    {
+	item->x = x;
+	item->y = y;
+    }
     imgui_title(imgui, item, item->x, item->y, item->width, item->height, label); // title.
     if(item->parent)
     {
@@ -691,18 +707,22 @@ b32  imgui_colour(imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 
 	// r, g, b, a
 	{
-	    v4 colour = { 1.0, 1.0, 1.0, 1.0 };
+	    local v4 colour = { 1.0, 1.0, 1.0, 1.0 };
 	    
-	    imgui_x32(imgui, 0, true, popup_x, background.y1,                      popup_width, item->height, "R", &colour.r, 0, 0, 0);
-	    imgui_x32(imgui, 0, true, popup_x, background.y1 + item->height,       popup_width, item->height, "G", &colour.g, 0, 0, 0);
-	    imgui_x32(imgui, 0, true, popup_x, background.y1 + (item->height * 2), popup_width, item->height, "B", &colour.b, 0, 0, 0);
-	    imgui_x32(imgui, 0, true, popup_x, background.y1 + (item->height * 3), popup_width, item->height, "A", &colour.a, 0, 0, 0);
+	    imgui_x32(imgui, item, true, popup_x, background.y1,                      popup_width, item->height, "R", &colour.r, 0, 0, 0);
+	    imgui_x32(imgui, item, true, popup_x, background.y1 + item->height,       popup_width, item->height, "G", &colour.g, 0, 0, 0);
+	    imgui_x32(imgui, item, true, popup_x, background.y1 + (item->height * 2), popup_width, item->height, "B", &colour.b, 0, 0, 0);
+	    imgui_x32(imgui, item, true, popup_x, background.y1 + (item->height * 3), popup_width, item->height, "A", &colour.a, 0, 0, 0);
 
-	    if(imgui_button(imgui, 0, "confirm", popup_x, background.y1 + (item->height * 4), popup_width, item->height))
+	    if(imgui_button(imgui, item, "confirm", popup_x, background.y1 + (item->height * 4), popup_width, item->height))
 	    {
 		// save colour.
-		item->active = false;
+		imgui_set_deactive(imgui, item);
+		*vec = colour;
+		
 	    }
+	    // HACK:
+	    imgui_advance(imgui, -item->height);
 
 	    // preview box (comes after 'confirm' because it must be rendered on top.)
 	    rect preview
@@ -722,6 +742,11 @@ b32  imgui_colour(imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 b32 imgui_image (imgui_state* imgui, string label, GLuint image, r32 x, r32 y, r32 width, r32 height)
 {
     imgui_item* item = imgui_updateitem(imgui, imgui->current_item, label, x, y, width, height);
+    if(item->parent)
+    {
+	item->x = x;
+	item->y = y;
+    }
 
     r32 padding = item->width * imgui->theme.margin_padding;
 	
@@ -868,6 +893,12 @@ b32 imgui_v3    (imgui_state* imgui, string label, v3* vector3,  b32 enabled = t
     }
     
     imgui_item* item = imgui_updateitem(imgui, imgui->current_item, label, x, y, width, height);
+
+    if(item->parent)
+    {
+	item->x = x;
+	item->y = y;
+    }
 
     imgui_title(imgui, item, item->x, item->y, item->width, item->height, label); // title.
     imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, 0, 0, 0, vector3, 0, 0, 0); // value.
