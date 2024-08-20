@@ -1,21 +1,24 @@
 #include <windows.h>
 #include <shellscalingapi.h>
 
-#include "p:/Handmade Heroine/hh.cpp"
-#include "p:/Handmade Heroine/hh_opengl.cpp"
-#include "p:/Handmade Heroine/hh_opengl_windows.cpp"
-#include "p:/Handmade Heroine/hh_math.cpp"
-#include "p:/Handmade Heroine/hh_os.cpp"
-#include "p:/Handmade Heroine/hh_windows.cpp"
-#include "p:/Handmade Heroine/hh_string.cpp"
-#include "p:/Handmade Heroine/hh_keymap.cpp"
-#include "p:/Handmade Heroine/hh_keymap_windows.cpp"
-#include "p:/Handmade Heroine/hh_graphics_2d.cpp"
+#include "p:/Handmade/handmade.cpp"
+#include "p:/Handmade/handmade_opengl.cpp"
+#include "p:/Handmade/handmade_opengl_windows.cpp"
+#include "p:/Handmade/handmade_math.cpp"
+#include "p:/Handmade/handmade_os.cpp"
+#include "p:/Handmade/handmade_windows.cpp"
+#include "p:/Handmade/handmade_string.cpp"
+#include "p:/Handmade/handmade_keymap.cpp"
+#include "p:/Handmade/handmade_keymap_windows.cpp"
+
+global b32 running;
+global s32 window_width;
+global s32 window_height;
+
+#include "p:/Handmade/handmade_graphics_2d.cpp"
 
 #include "l_imgui.cpp"
 #include "l_imgui_test.cpp"
-
-global b32 running;
 
 LRESULT WINAPI
 windows_messageproc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -33,6 +36,9 @@ WinMain (HINSTANCE instance,
 	 LPSTR     lpCmdLine,
 	 s32       nShowCmd)
 {
+    window_width = 1280;
+    window_height = 720;
+
     WNDCLASSA window_class = {};
     window_class.style 	       = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
     window_class.lpfnWndProc   = windows_messageproc;
@@ -49,8 +55,8 @@ WinMain (HINSTANCE instance,
 	
 	// resize the window.
 	
-	s32 window_width  = 1920;
-	s32 window_height = 1080;
+	window_width  = 1920;
+	window_height = 1080;
 
 	RECT window_rect = {
 	    (monitor_width  - window_width )/2,
@@ -167,7 +173,10 @@ WinMain (HINSTANCE instance,
 
 		    // //
 
+
 		    imgui_update(&primitive, &imgui);
+		    
+		    
 
 		    // //
 		    

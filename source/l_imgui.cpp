@@ -6,8 +6,6 @@
 // shared/shared_keymap.cpp
 // shared/shared_graphics_2d.cpp
 
-#define IMGUI_MAX_ITEMS      100
-#define IMGUI_MAX_CHILDREN   100
 #define IMGUI_MAX_FIELD_SIZE 256 
 
 #define IMGUI_WHITE() 1.0, 1.0, 1.0, 1.0
@@ -16,7 +14,6 @@ struct imgui_item
 {
     u32 hash = 0;
     imgui_item* parent;
-    imgui_item* children[IMGUI_MAX_CHILDREN];
     b32 active;
     
     r32 x;
@@ -26,7 +23,6 @@ struct imgui_item
     
     s32 z;
     
-    u32 child_count;
     r32 child_x;
     r32 child_y;
 };
@@ -63,17 +59,10 @@ struct imgui_state
     
     imgui_item* root;
     imgui_item* current_item;
+    s32 item_count;
 
     string text;
     s32 text_cursor;
-
-    // do not change these at runtime!
-    GLuint*             texture;
-    v4*                 colour;
-
-
-    s32 crosshair_texture;
-    s32  selector_texture;
 };
 
 internal inline void* imgui_pushbuffer(imgui_state* imgui, s32 size)
@@ -91,6 +80,10 @@ internal inline void* imgui_pushbuffer(imgui_state* imgui, s32 size)
 internal void
 imgui_initialise(imgui_state* imgui, void* region_base, s32 region_size, render_information_primitive* primitive, action_map* keymap)
 {
+    // theme.
+
+    // theme.
+
     imgui->keymap = keymap;
 
     imgui->primitive = primitive;
@@ -107,7 +100,7 @@ internal imgui_item*
 imgui_finditem(imgui_state* imgui, u32 hash)
 {
     imgui_item* item = imgui->root;
-    for(u32 i = 0; i < IMGUI_MAX_ITEMS; i++)
+    for(u32 i = 0; i < imgui->item_count; i++)
     {
 	if(hash == item->hash) return(item);
 	item += 1;
@@ -128,53 +121,101 @@ imgui_computehash  (s8* str)
     return (hash); //note: hash % ARRAY_SIZE (hash table)
 }
 
-internal void
-imgui_setstate(imgui_item* item, b32 active)
-{
-    /* active:
-       when setting an item active,
-       1.you want to set that item's siblings deactive (and all their children and their children's children and so on)
-       2.you want to set that item's parent active (and their parent's parent and so on)
-       of course this means setting the siblings of the items's parents deactive
+
+
+// internal void
+// imgui_setstate(imgui_item* item, b32 active)
+// {
+//     /* active:
+//        when setting an item active,
+//        1.you want to set that item's siblings deactive (and all their children and their children's children and so on)
+//        2.you want to set that item's parent active (and their parent's parent and so on)
+//        of course this means setting the siblings of the items's parents deactive
     
-       deactive:
-       when setting an item deactive,
-       1. you want to set that item's children deactive (and their children's children and so on)
-    */
-    if(active)
-    {
-	item->active = true;
+//        deactive:
+//        when setting an item deactive,
+//        1. you want to set that item's children deactive (and their children's children and so on)
+//     */
+//     if(active)
+//     {
+// 	item->active = true;
 
-	if(item->parent)
-	{
-	    imgui_item* parent = item->parent;
+// 	if(item->parent)
+// 	{
+// 	    imgui_item* parent = item->parent;
 
-	    imgui_setstate(parent, true);
+// 	    imgui_setstate(parent, true);
 		
-	    u32 child_count = 0;
-	    while(parent->children[child_count])
-	    {
-		imgui_item* child = parent->children[child_count];
-		child_count += 1;
+// 	    u32 child_count = 0;
+// 	    while(parent->children[child_count])
+// 	    {
+// 		imgui_item* child = parent->children[child_count];
+// 		child_count += 1;
 
-		if(child == item) continue;
+// 		if(child == item) continue;
 
-		imgui_setstate(child, false);
-	    }
+// 		imgui_setstate(child, false);
+// 	    }
+// 	}
+//     }
+//     else
+//     {
+// 	item->active = false;
+
+// 	u32 child_count = 0;
+// 	while(item->children[child_count])
+// 	{
+// 	    imgui_item* child = item->children[child_count];
+
+// 	    imgui_setstate(child, false);
+	    
+// 	    child_count += 1;
+// 	}
+//     }
+// }
+
+
+internal void
+imgui_set_deactive(imgui_state* imgui, imgui_item* item)
+{
+    item->active = false;
+
+    //
+    // child(ren) must *also* not be active.
+    //
+
+    // find child(ren).
+    
+    for(s32 i = 0; i < imgui->item_count; i++)
+    {
+	imgui_item* child = &imgui->root[i];
+	
+	if(child->parent == item) // is this my child?
+	{
+	    imgui_set_deactive(imgui, child);
+	    continue;
 	}
     }
-    else
+}
+internal void
+imgui_set_active(imgui_state* imgui, imgui_item* item)
+{
+    item->active = true;
+    
+    //
+    //  siblings must *also* not be active.
+    //
+
+    // find sibling(s).
+
+    for(s32 i = 0; i < imgui->item_count; i++)
     {
-	item->active = false;
-
-	u32 child_count = 0;
-	while(item->children[child_count])
-	{
-	    imgui_item* child = item->children[child_count];
-
-	    imgui_setstate(child, false);
-	    
-	    child_count += 1;
+	imgui_item* sibling = &imgui->root[i];
+	
+	if((sibling->parent == item->parent) && (sibling != item)) // is this my sibling? (and not myself!)
+ 	{
+	    imgui_set_deactive(imgui, sibling);
+	    continue;
 	}
     }
 }
@@ -254,6 +295,8 @@ imgui_item* imgui_updateitem(imgui_state* imgui, imgui_item* parent, string labe
 	item         = (imgui_item*)imgui_pushbuffer(imgui, sizeof(imgui_item));
 	item->hash   = imgui_computehash(hash_label.s);
 	item->parent = parent;
+	
+	imgui->item_count++;
 
 	if(!item->parent)
 	{
@@ -264,17 +307,12 @@ imgui_item* imgui_updateitem(imgui_state* imgui, imgui_item* parent, string labe
 	}
     }
 	
-    // edited every frame, need to be reset, regardless of intial values
-    item->child_count = 0;
-    
     if(item->parent)
     {
 	item->x      = item->parent->child_x;
 	item->y      = item->parent->child_y;
 	item->width  = item->parent->width - (item->parent->width * imgui->theme.hierarchy_padding);
 	item->height = item->parent->height;
-
-	item->parent->children[item->parent->child_count++] = item;
     }
 
     item->child_x = item->x + (item->width  * imgui->theme.hierarchy_padding);
@@ -301,8 +339,8 @@ b32 imgui_title(imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width, r
     
     if(pressed)
     {
-	if(item->active) imgui_setstate(item, false);  // de-activate, active, pressed 
-	else             imgui_setstate(item, true);   //    activate, not active, pressed 
+	if(item->active) imgui_set_deactive(imgui, item);  // de-activate, active, pressed 
+	else             imgui_set_active  (imgui, item);   //    activate, not active, pressed 
     }
 
     if(item->active) background_colour = calc_brighten(background_colour, 0.5);
@@ -563,8 +601,8 @@ imgui_item* imgui_x32   (imgui_state* imgui, imgui_item* parent, r32 x, r32 y, r
 	else if(hexadecimal) *(u32*)hexadecimal = string_to_hexadecimal(imgui->text.s);
 	    
 	else if(text) mem_copy(imgui->text.s, text, STRING_MAX_SIZE);
-	    
-	imgui_setstate(item, false);
+
+	imgui_set_deactive(imgui, item);
 	    
 	imgui->text_cursor = 0; //note: this is incomplete, we need a better solution
 	mem_clear(imgui->text.s, STRING_MAX_SIZE);
