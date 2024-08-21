@@ -10,18 +10,15 @@
 #include "p:/Handmade/handmade_string.cpp"
 #include "p:/Handmade/handmade_keymap.cpp"
 #include "p:/Handmade/handmade_keymap_windows.cpp"
-
-global b32 running;
-global s32 window_width;
-global s32 window_height;
-
 #include "p:/Handmade/handmade_graphics_2d.cpp"
 
 #include "l_imgui.cpp"
 #include "l_imgui_test.cpp"
 
+global b32 running = false;
+
 LRESULT WINAPI
-windows_messageproc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+windows_procedure_messages(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
     if(message == WM_CLOSE)
     {
@@ -31,181 +28,114 @@ windows_messageproc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 }
 
 s32 WINAPI
-WinMain (HINSTANCE instance,
+WinMain (HINSTANCE      instance,
 	 HINSTANCE prev_instance,
-	 LPSTR     lpCmdLine,
-	 s32       nShowCmd)
+	 LPSTR           cmdline,
+	 s32        show_cmdline)
 {
-    window_width = 1280;
-    window_height = 720;
+    
+    b32 fullscreen = false;
 
-    WNDCLASSA window_class = {};
-    window_class.style 	       = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-    window_class.lpfnWndProc   = windows_messageproc;
-    window_class.hInstance     = instance;
-    window_class.hCursor       = LoadCursorA(0, IDC_ARROW);
-    window_class.lpszClassName = "Immediate Mode Graphical User Interface";
-
-    if(RegisterClassA(&window_class))
+    windows_information info = {};
+    
+    if(windows_initialise_window(&info, instance, windows_procedure_messages, 1920, 1080,
+	                         "Lightweight Immediate Mode Graphical User Interface (L-IMGUI)"))
     {
-	SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+	// input.
+	action_map current_map  = {};
+	action_map previous_map = {};
+	
+	// @ graphics
+	render_information_primitive primitive = {};
+	graphics_primitives_initialise(&primitive, info.window_width, info.window_height);
 
-	s32 monitor_width  = GetSystemMetrics(SM_CXSCREEN);
-	s32 monitor_height = GetSystemMetrics(SM_CYSCREEN);
-	
-	// resize the window.
-	
-	window_width  = 1920;
-	window_height = 1080;
+	// @ font
+	io_file file = io_readfile("../data/Ubuntu_36.font");
+	if(file.source)
+	{
+	    font_header* header = (font_header*)file.source;
 
-	RECT window_rect = {
-	    (monitor_width  - window_width )/2,
-	    (monitor_height - window_height)/2,
-	    window_width  + window_rect.left  ,
-	    window_height + window_rect.top   ,
-	};
-	
-	if(!AdjustWindowRect(&window_rect, WS_SYSMENU | WS_MINIMIZEBOX | WS_CAPTION, false)) {
-	    OutputDebugStringA("'AdjustWindowRect' failed!\n");
+	    s8* source = (s8*)header + header->byte_offset;
+	    s8* glyphs = (s8*)header + header->glyph_offset;
+
+	    graphics_primitive_set_font_colour(&primitive.font, 1.0, 1.0, 1.0, 1.0);
+	    graphics_primitive_set_font_texture(&primitive.font, opengl_texture_compile(source, header->width, header->height));
+	    graphics_primitive_set_font_linespacing(&primitive.font, header->line_spacing);
+
+	    for(s32 g = 0; g < header->glyph_count; g++)
+	    {
+		graphics_primitive_set_font_glyph(&primitive.font,
+						  ((glyph_header*)glyphs)[g].character,
+						  ((glyph_header*)glyphs)[g].width, ((glyph_header*)glyphs)[g].height,
+						  ((glyph_header*)glyphs)[g].offset,
+						  ((glyph_header*)glyphs)[g].spacing,((glyph_header*)glyphs)[g].pre_spacing,
+						  ((glyph_header*)glyphs)[g].u0, ((glyph_header*)glyphs)[g].v0, ((glyph_header*)glyphs)[g].u1, ((glyph_header*)glyphs)[g].v1);
+	    }
+	    io_freefile(file);
 	}
 	
-	HWND window = CreateWindowA(window_class.lpszClassName,
-				    window_class.lpszClassName,
-				    WS_VISIBLE | WS_SYSMENU | WS_MINIMIZEBOX | WS_CAPTION,
-				    window_rect.left, window_rect.top,
-				    (window_rect.right - window_rect.left),
-				    (window_rect.bottom - window_rect.top),
-				    0, 0,
-				    instance,
-				    0);
-	if(window)
-	{
-	    running = true;
+	// @ imgui
 
-	    HDC window_dc = GetDC(window);
-	    if(windows_opengl_initialise(window_dc))
-	    {
-		windows_opengl_updateviewport(window_width, window_height);
+	u32   data_size = megabytes(10);
+	void* data_base = VirtualAlloc(0, data_size, MEM_COMMIT, PAGE_READWRITE);
+	ASSERT(data_base)
 
-		// @ graphics
-		render_information_primitive primitive = {};
-		graphics_primitives_initialise(&primitive, window_width, window_height);
+	imgui_state imgui = {};
+	imgui_initialise(&imgui, data_base, data_size, &primitive, &current_map);
 
-		// @ font
-		io_file file = io_readfile("../data/Ubuntu_36.font");
-		if(file.source)
-		{
-		    font_header* header = (font_header*)file.source;
-
-		    s8* source = (s8*)header + header->byte_offset;
-		    s8* glyphs = (s8*)header + header->glyph_offset;
-
-		    graphics_primitive_set_font_colour(&primitive.font, 1.0, 1.0, 1.0, 1.0);
-		    graphics_primitive_set_font_texture(&primitive.font, opengl_texture_compile(source, header->width, header->height));
-		    graphics_primitive_set_font_linespacing(&primitive.font, header->line_spacing);
-
-		    for(s32 g = 0; g < header->glyph_count; g++)
-		    {
-			graphics_primitive_set_font_glyph(&primitive.font,
-							  ((glyph_header*)glyphs)[g].character,
-							  ((glyph_header*)glyphs)[g].width, ((glyph_header*)glyphs)[g].height,
-							  ((glyph_header*)glyphs)[g].offset,
-							  ((glyph_header*)glyphs)[g].spacing,((glyph_header*)glyphs)[g].pre_spacing,
-							  ((glyph_header*)glyphs)[g].u0, ((glyph_header*)glyphs)[g].v0, ((glyph_header*)glyphs)[g].u1, ((glyph_header*)glyphs)[g].v1);
-		    }
-		    io_freefile(file);
-		}
-
-		// @ input
-		action_map  current_map = {};
-		action_map previous_map = {};
-
-		// @ imgui
-
-		u32   data_size = megabytes(10);
-		void* data_base = VirtualAlloc(0, data_size, MEM_COMMIT, PAGE_READWRITE);
-		ASSERT(data_base)
-
-		imgui_state imgui = {};
-		imgui_initialise(&imgui, data_base, data_size, &primitive, &current_map);
-		
-		// @ time
-		LARGE_INTEGER counter_frequency;
-		QueryPerformanceFrequency(&counter_frequency);
+	// timing.
+	LARGE_INTEGER counter_frequency;
+	QueryPerformanceFrequency(&counter_frequency);
     
-		LARGE_INTEGER counter_begin = {};
-		LARGE_INTEGER counter_mid   = {};
-		LARGE_INTEGER counter_end   = {};
+	LARGE_INTEGER counter_begin = {};
+	LARGE_INTEGER counter_mid   = {};
+	LARGE_INTEGER counter_end   = {};
 
-		r32 actual_ms = 0.0;
-		r32 target_ms = ((r32)1000) / 60;
-		r32  frame_ms = 0;
+	r32 actual_ms = 0.0;
+	r32 target_ms = ((r32)1000) / 60;
+	r32  frame_ms = 0;
 
-		while(running)
-		{
-		    QueryPerformanceCounter(&counter_begin);
-		    
-		    MSG message = {};
-		    while(PeekMessageA(&message, window, 0, 0, PM_REMOVE))
-		    {
-			TranslateMessage(&message);
-			DispatchMessageA(&message);
-		    }
+	running = true;
 
-		    windows_actions_update(window, window_width, window_height, &current_map, &previous_map);
-		    
+	while(running)
+	{
+	    QueryPerformanceCounter(&counter_begin);
+	    
+	    windows_process_messages(&info);
+	    windows_actions_update(info.window, info.window_width, info.window_height, &current_map, &previous_map);
 
-		    if(current_map.actions[ACTION_ESC].pressed) // should this be here?
-		    {
-			running = false;
-		    }
-
-		    // //
-
-
-		    imgui_update(&primitive, &imgui);
-		    
-		    
-
-		    // //
-		    
-		    QueryPerformanceCounter(&counter_mid);
-		    actual_ms = ((r32)(counter_mid.QuadPart - counter_begin.QuadPart)/counter_frequency.QuadPart) * 1000;
-
-		    if(actual_ms < target_ms)
-		    {
-			Sleep(target_ms - actual_ms);
-		    }
-		    SwapBuffers(window_dc); // @ show prepared frame
-		    
-
-		    
-		    
-		    
-
-		    previous_map = current_map;
-		    
-
-		    QueryPerformanceCounter(&counter_end);
-		    frame_ms = ((r32)(counter_end.QuadPart - counter_begin.QuadPart)/counter_frequency.QuadPart) * 1000;
-		}
-		
+	    if(current_map.actions[ACTION_CTRL].down && current_map.actions[ACTION_F].pressed)
+	    {
+		windows_fullscreen(&info, &fullscreen);
+		graphics_primitive_set_window_dimensions(&primitive, info.window_width, info.window_height);
+	    }
+	    else if(current_map.actions[ACTION_ESC].pressed)
+	    {
+		running = false;
 	    }
 
-	    DestroyWindow(window);
-	}
-	else
-	{
-	    OutputDebugStringA("'CreateWindowA' failed!\n");
-	}
+	    // begin program.
 
-	UnregisterClassA(window_class.lpszClassName, instance);
-    }
-    else
-    {
-	OutputDebugStringA("'RegisterClassA' failed!\n");
-	
-    }
+	    imgui_update(&primitive, &imgui);
 
+	    // end program.
+	    
+	    QueryPerformanceCounter(&counter_mid);
+	    actual_ms = ((r32)(counter_mid.QuadPart - counter_begin.QuadPart)/counter_frequency.QuadPart) * 1000;
+
+	    if(actual_ms < target_ms)
+	    {
+		Sleep(target_ms - actual_ms);
+	    }
+
+	    SwapBuffers(info.window_dc); // @ show prepared frame
+
+	    previous_map = current_map;
+
+	    QueryPerformanceCounter(&counter_end);
+	    frame_ms = ((r32)(counter_end.QuadPart - counter_begin.QuadPart)/counter_frequency.QuadPart) * 1000;
+	}
+    }
+    
     return(0);
 }

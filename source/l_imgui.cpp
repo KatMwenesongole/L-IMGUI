@@ -107,8 +107,6 @@ imgui_initialise(imgui_state* imgui, void* region_base, s32 region_size, render_
     imgui->theme.text_colour       = { 1.0 , 1.0 , 1.0  };
 
     // theme.
-
-    
 }
 
 internal imgui_item*
