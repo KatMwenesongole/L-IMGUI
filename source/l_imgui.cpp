@@ -79,11 +79,23 @@ internal inline void* imgui_pushbuffer(imgui_state* imgui, s32 size)
 internal void
 imgui_initialise(imgui_state* imgui, void* region_base, s32 region_size, render_information_primitive* primitive, action_map* keymap)
 {
+    imgui->keymap = keymap;
+
+    imgui->primitive = primitive;
+    
+    imgui->region_base = region_base;
+    imgui->region_size = region_size;
+    imgui->region_used = 0;
+
+    imgui->root = (imgui_item*)imgui->region_base;
+    
     // theme.
 
     imgui->theme.bar_width         = 4.0; // default
     imgui->theme.bar_height        = 0.35;
-    imgui->theme.cursor_width      = 0.075;
+    
+    imgui->theme.cursor_width      = ((imgui->primitive->font.glyphs[0].spacing)/(r32)imgui->primitive->window_width)*16.0;
+    
     imgui->theme.hierarchy_padding = 0.05;
     imgui->theme.label_padding     = 0.02;
     imgui->theme.text_padding      = 0.7;
@@ -96,15 +108,7 @@ imgui_initialise(imgui_state* imgui, void* region_base, s32 region_size, render_
 
     // theme.
 
-    imgui->keymap = keymap;
-
-    imgui->primitive = primitive;
     
-    imgui->region_base = region_base;
-    imgui->region_size = region_size;
-    imgui->region_used = 0;
-
-    imgui->root = (imgui_item*)imgui->region_base;
 }
 
 internal imgui_item*
@@ -328,18 +332,17 @@ void nest(imgui_state* imgui, string label)
 }
 void unnest(imgui_state* imgui)
 {
-    
-      v3 colomn_colour = calc_darken(imgui->theme.colour, 0.5);
-      graphics_primitive_set_colour(imgui->primitive, colomn_colour.r, colomn_colour.g, colomn_colour.b, 1.0);
-      graphics_primitive_set_texture(imgui->primitive, 0);
+    v3 colomn_colour = calc_darken(imgui->theme.colour, 0.5);
+    graphics_primitive_set_colour(imgui->primitive, colomn_colour.r, colomn_colour.g, colomn_colour.b, 1.0);
+    graphics_primitive_set_texture(imgui->primitive, 0);
 
-      rect vertex_rect = {
-      imgui->current_item->x,
-      imgui->current_item->y + imgui->current_item->height,
-      imgui->current_item->x + imgui->current_item->width - (imgui->current_item->width * imgui->theme.hierarchy_padding),
-      imgui->current_item->child_y };
+    rect vertex_rect = {
+	imgui->current_item->x,
+	imgui->current_item->y + imgui->current_item->height,
+	imgui->current_item->x + imgui->current_item->width - (imgui->current_item->width * imgui->theme.hierarchy_padding),
+	imgui->current_item->child_y };
 
-      graphics_primitive_render_rect(imgui->primitive, vertex_rect, 0);
+    graphics_primitive_render_rect(imgui->primitive, vertex_rect, 0);
     
 
     // the order of events here is important.
@@ -383,14 +386,69 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
     {
 	temp = item->width * imgui->theme.value_padding;
     }
-	
+    
+    if(real)
+    {
+	real_to_string(*real, value_string.s, &value_string.size, 1);
+    }
+    else if(integer)
+    {
+	integer_to_string(*integer, value_string.s, &value_string.size);
+    }
+    else if(hexadecimal)
+    {
+	hex_to_string(*hexadecimal, value_string.s, &value_string.size);
+    }
+    else if(vec3)
+    {
+	value_string.size = string_print(value_string.s, "(%r, %r, %r)", vec3->x, vec3->y, vec3->z);
+    }
+    else if(vec4)
+    {
+	value_string.size = string_print(value_string.s, "(%r, %r, %r, %r)", vec4->x, vec4->y, vec4->z, vec4->w);
+    }
+    else if(text)
+    {
+	value_string.size = STRING_MAX_SIZE;
+	mem_copy(text, value_string.s, STRING_MAX_SIZE);
+    }
+    else if(boolean)
+    {
+	if(*boolean) value_string.size = string_print(value_string.s, "(TRUE)" );
+	else         value_string.size = string_print(value_string.s, "(FALSE)");
+    }
+	    
+    // DRAW
+    
+    v3 inactive_colour = calc_darken(imgui->theme.text_colour, 0.3);
+	    
+    r32 text_height = 0;
+    r32 text_width  = 0;
+	    
+    r32 text_y = 0;
+    r32 text_x = x + temp;
+
+    graphics_primitive_metrics_text(imgui->primitive, value_string.s, value_string.size, &text_width, &text_height);
+    text_y = y + (height - text_height)/(r32)2;
+
+    // prevent overflow
+    // ...
+
+    r32 overflow = (width - ((x+temp) - x)) - text_width;
+    if(overflow < 0) text_x += overflow - (width * imgui->theme.label_padding);
+
+    graphics_primitive_set_zindex(imgui->primitive, 1);
+    graphics_primitive_set_colour(imgui->primitive, inactive_colour.r, inactive_colour.g, inactive_colour.b, 1.0);
+    graphics_primitive_render_text(imgui->primitive, value_string.s, value_string.size, vec2(text_x, text_y));
+    graphics_primitive_set_zindex(imgui->primitive, 0);
+
     if(edit) //note: change value
     {
-	if     (imgui->keymap->actions[ACTION_RARROW].pressed) // MOVE CURSOR FORWARD
+	if     (imgui->keymap->actions[ACTION_RARROW].pressed)    // MOVE CURSOR FORWARD
 	{
 	    imgui->text_cursor += ((imgui->text_cursor + 1) > IMGUI_MAX_FIELD_SIZE) ? 0 : 1;
 	}
-	else if(imgui->keymap->actions[ACTION_LARROW].pressed) // MOVE CURSOR BACK
+	else if(imgui->keymap->actions[ACTION_LARROW].pressed)    // MOVE CURSOR BACK
 	{
 	    imgui->text_cursor -= ((imgui->text_cursor - 1) < 0) ? 0 : 1;
 	}
@@ -418,7 +476,7 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
 	    }
 	    imgui->text.size--;
 	}
-	else // ADD CHARACTER
+	else                                                      // ADD CHARACTER
 	{
 	    for(s32 k = 0; k < ACTION_COUNT; k++)
 	    {
@@ -443,94 +501,23 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
 	    
 	}
 	
-	// // // // // DRAW
+	// cursor box.
 
-	//note: display field
-	r32 field_width = 0;
-	r32 field_height = 0;
-	graphics_primitive_metrics_text(imgui->primitive, imgui->text.s, imgui->text.size, &field_width, &field_height);
-
-	string cursor_text = imgui->text;
-	cursor_text.size = imgui->text_cursor;
-
-	graphics_primitive_metrics_text(imgui->primitive, cursor_text.s, cursor_text.size, &field_width, &field_height);
-	    
-	r32 field_y = y + ((height - field_height)/2);
-	graphics_primitive_set_zindex(imgui->primitive, 1);
-	graphics_primitive_render_text(imgui->primitive, imgui->text.s, imgui->text.size, vec2(x + temp, field_y));
-	graphics_primitive_set_zindex(imgui->primitive, 0);
-
-	//note: field cursor
+	// box and glyph (inverted colour.)
 	
 	rect uv_rect = { 0.0, 1.0, 0.0, 1.0 };
 	rect cursor_rect =
 	{
-	    (x + temp) + field_width,
-	    y + ((height)-(height * 0.7))/2, 
+	    text_x + (imgui->theme.cursor_width*imgui->text_cursor),
+	    y,
 	    cursor_rect.x0 + imgui->theme.cursor_width,
-	    cursor_rect.y0 + (height*0.7)   // BAD
+	    cursor_rect.y0 + height   
 	};
 	
 	graphics_primitive_set_colour(imgui->primitive, 1.0, 1.0, 1.0, 1.0); // ??? should this be part of the theme?
 	graphics_primitive_set_texture(imgui->primitive, 0);
 	graphics_primitive_set_zindex(imgui->primitive, 1);
 	graphics_primitive_render_rect(imgui->primitive, cursor_rect, &uv_rect);
-	graphics_primitive_set_zindex(imgui->primitive, 0);
-    }
-    else
-    {
-	if(real)
-	{
-	    real_to_string(*real, value_string.s, &value_string.size, 1);
-	}
-	else if(integer)
-	{
-	    integer_to_string(*integer, value_string.s, &value_string.size);
-	}
-	else if(hexadecimal)
-	{
-	    hex_to_string(*hexadecimal, value_string.s, &value_string.size);
-	}
-	else if(vec3)
-	{
-	    value_string.size = string_print(value_string.s, "(%r, %r, %r)", vec3->x, vec3->y, vec3->z);
-	}
-	else if(vec4)
-	{
-	    value_string.size = string_print(value_string.s, "(%r, %r, %r, %r)", vec4->x, vec4->y, vec4->z, vec4->w);
-	}
-	else if(text)
-	{
-	    value_string.size = STRING_MAX_SIZE;
-	    mem_copy(text, value_string.s, STRING_MAX_SIZE);
-	}
-	else if(boolean)
-	{
-	    if(*boolean) value_string.size = string_print(value_string.s, "TRUE" );
-	    else         value_string.size = string_print(value_string.s, "FALSE");
-	}
-	    
-	// // // // // DRAW
-	v3 inactive_colour = calc_darken(imgui->theme.text_colour, 0.3);
-	    
-	r32 text_height = 0;
-	r32 text_width  = 0;
-	    
-	r32 text_y = 0;
-	r32 text_x = x + temp;
-
-	graphics_primitive_metrics_text(imgui->primitive, value_string.s, value_string.size, &text_width, &text_height);
-	text_y = y + (height - text_height)/(r32)2;
-
-	// prevent overflow
-	// ...
-
-	r32 overflow = (width - ((x+temp) - x)) - text_width;
-	if(overflow < 0) text_x += overflow - (width * imgui->theme.label_padding);
-
-	graphics_primitive_set_zindex(imgui->primitive, 1);
-	graphics_primitive_set_colour(imgui->primitive, inactive_colour.r, inactive_colour.g, inactive_colour.b, 1.0);
-	graphics_primitive_render_text(imgui->primitive, value_string.s, value_string.size, vec2(text_x, text_y));
 	graphics_primitive_set_zindex(imgui->primitive, 0);
     }
 }
