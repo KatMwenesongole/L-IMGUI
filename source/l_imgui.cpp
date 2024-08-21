@@ -4,18 +4,7 @@
 // SELECT  - LEFT  MOUSE (CLICK) 
 //
 
-//
-// INCOMPLETE!
-//
-
-// needs:
-// shared/shared_keymap.cpp
-// shared/shared_graphics_2d.cpp
-//
-
 #define IMGUI_MAX_FIELD_SIZE 256 
-
-#define IMGUI_WHITE() 1.0, 1.0, 1.0, 1.0
 
 struct imgui_item
 {
@@ -31,6 +20,11 @@ struct imgui_item
     r32 height;
     
     r32 child_y;
+
+    b32 grabbed;
+
+    r32 hold_x; // there is lag.
+    r32 hold_y;
 };
 struct imgui_theme
 {
@@ -86,6 +80,19 @@ internal void
 imgui_initialise(imgui_state* imgui, void* region_base, s32 region_size, render_information_primitive* primitive, action_map* keymap)
 {
     // theme.
+
+    imgui->theme.bar_width         = 4.0; // default
+    imgui->theme.bar_height        = 0.35;
+    imgui->theme.cursor_width      = 0.075;
+    imgui->theme.hierarchy_padding = 0.05;
+    imgui->theme.label_padding     = 0.02;
+    imgui->theme.text_padding      = 0.7;
+    imgui->theme.value_padding     = 0.7;
+    imgui->theme.margin_padding    = 0.05;
+    imgui->theme.colour            = { 0.27, 0.17, 0.18 };
+    imgui->theme.accent_colour_0   = { 0.44, 0.23, 0.27 };
+    imgui->theme.accent_colour_1   = { 0.06, 0.2 , 0.21 };
+    imgui->theme.text_colour       = { 1.0 , 1.0 , 1.0  };
 
     // theme.
 
@@ -173,7 +180,7 @@ imgui_set_active(imgui_state* imgui, imgui_item* item)
 }
 
 internal void
-imgui_mousestate(imgui_state* imgui, rect region, b32* pressed, b32* touched, b32* grabbing)
+imgui_mousestate(imgui_state* imgui, rect region, b32* pressed, b32* touched, b32* grabbed)
 {
     r32 x = imgui->keymap->mouse_position.x;
     r32 y = imgui->keymap->mouse_position.y;
@@ -187,7 +194,7 @@ imgui_mousestate(imgui_state* imgui, rect region, b32* pressed, b32* touched, b3
 	}
 	else if(imgui->keymap->actions[ACTION_RMOUSE].holding)
 	{
-	    *grabbing = true;
+	    *grabbed = true;
 	}
 	else
 	{
@@ -238,28 +245,36 @@ b32 imgui_title(imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width, r
     }
     else if(grabbed && !item->parent)
     {
-	local r32 grab_x = imgui->keymap->mouse_position.x;
-	local r32 grab_y = imgui->keymap->mouse_position.y;
+	if(!item->grabbed) // did we just grab this?
+	{
+	    item->grabbed = true;
 
-	r32 dx = imgui->keymap->mouse_position.x - grab_x;
-	r32 dy = imgui->keymap->mouse_position.y - grab_y;
-	
-	grab_x = imgui->keymap->mouse_position.x;
-	grab_y = imgui->keymap->mouse_position.y;
-
-	item->x += dx;
-	item->y += dy;
-	item->child_y = item->y + item->height;
-	
+	    item->hold_x = imgui->keymap->mouse_position.x - item->x;
+	    item->hold_y = imgui->keymap->mouse_position.y - item->y;
+	}
+	else // we've been holding onto this.
+	{
+	    item->x = imgui->keymap->mouse_position.x - item->hold_x;
+	    item->y = imgui->keymap->mouse_position.y - item->hold_y;
+	    
+	    item->child_y = item->y + item->height;
+	}
+      	
 	item_rect =
 	{
-	    x + dx, y + dy, x + width + dx, y + height + dy 
+	    item->x, item->y, item->x + width, item->y + height 
 	};
     }
     else if(pressed)
     {
 	if(item->active) imgui_set_deactive(imgui, item);  // de-activate, active, pressed 
-	else             imgui_set_active  (imgui, item);   //    activate, not active, pressed 
+	else             imgui_set_active  (imgui, item);  //    activate, not active, pressed
+
+	item->grabbed = false;
+    }
+    else
+    {
+	item->grabbed = false;
     }
 
     if(item->active) background_colour = calc_brighten(background_colour, 0.5);
@@ -313,7 +328,7 @@ void nest(imgui_state* imgui, string label)
 }
 void unnest(imgui_state* imgui)
 {
-    /*
+    
       v3 colomn_colour = calc_darken(imgui->theme.colour, 0.5);
       graphics_primitive_set_colour(imgui->primitive, colomn_colour.r, colomn_colour.g, colomn_colour.b, 1.0);
       graphics_primitive_set_texture(imgui->primitive, 0);
@@ -321,11 +336,11 @@ void unnest(imgui_state* imgui)
       rect vertex_rect = {
       imgui->current_item->x,
       imgui->current_item->y + imgui->current_item->height,
-      imgui->current_item->child_x,
+      imgui->current_item->x + imgui->current_item->width - (imgui->current_item->width * imgui->theme.hierarchy_padding),
       imgui->current_item->child_y };
 
       graphics_primitive_render_rect(imgui->primitive, vertex_rect, 0);
-    */
+    
 
     // the order of events here is important.
     // in the case we update the child_y of the current item, we are updating the parent,
@@ -352,10 +367,6 @@ void unnest(imgui_state* imgui)
 	imgui->current_item->parent->child_y = imgui->current_item->child_y;
     }
     imgui->current_item = imgui->current_item->parent;
-    
-
-    
-   
 }
 
 // internal.
@@ -460,7 +471,7 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
 	    cursor_rect.y0 + (height*0.7)   // BAD
 	};
 	
-	graphics_primitive_set_colour(imgui->primitive, IMGUI_WHITE()); // ??? should this be part of the theme?
+	graphics_primitive_set_colour(imgui->primitive, 1.0, 1.0, 1.0, 1.0); // ??? should this be part of the theme?
 	graphics_primitive_set_texture(imgui->primitive, 0);
 	graphics_primitive_set_zindex(imgui->primitive, 1);
 	graphics_primitive_render_rect(imgui->primitive, cursor_rect, &uv_rect);
@@ -763,7 +774,7 @@ b32 imgui_image (imgui_state* imgui, string label, GLuint image, r32 x, r32 y, r
 	item->x + width + padding, item->y + height + padding
     };
 	
-    graphics_primitive_set_colour (imgui->primitive, IMGUI_WHITE());
+    graphics_primitive_set_colour (imgui->primitive, 1.0, 1.0, 1.0, 1.0);
     graphics_primitive_set_texture(imgui->primitive, image);
     graphics_primitive_set_zindex(imgui->primitive, 1);
     graphics_primitive_render_rect(imgui->primitive, image_rect, &uv_rect);
@@ -1005,7 +1016,7 @@ b32 imgui_colour (imgui_state* imgui, string label, v4* vec, r32 x = 0, r32 y = 
 
 void imgui_beginframe(imgui_state* imgui)
 {
-    graphics_primitive_set_colour(imgui->primitive, IMGUI_WHITE());
+    graphics_primitive_set_colour(imgui->primitive, 1.0, 1.0, 1.0, 1.0);
     graphics_primitive_set_texture(imgui->primitive, 0);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);

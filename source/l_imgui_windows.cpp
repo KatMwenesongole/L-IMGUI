@@ -92,7 +92,7 @@ WinMain (HINSTANCE instance,
 		graphics_primitives_initialise(&primitive, window_width, window_height);
 
 		// @ font
-		io_file file = io_readfile("../data/Fontin_29.font");
+		io_file file = io_readfile("../data/Ubuntu_36.font");
 		if(file.source)
 		{
 		    font_header* header = (font_header*)file.source;
@@ -129,19 +129,6 @@ WinMain (HINSTANCE instance,
 		imgui_state imgui = {};
 		imgui_initialise(&imgui, data_base, data_size, &primitive, &current_map);
 		
-		imgui.theme.bar_width         = 4.0; // default
-		imgui.theme.bar_height        = 0.35;
-		imgui.theme.cursor_width      = 0.075;
-		imgui.theme.hierarchy_padding = 0.05;
-		imgui.theme.label_padding     = 0.02;
-		imgui.theme.text_padding      = 0.7;
-		imgui.theme.value_padding     = 0.7;
-		imgui.theme.margin_padding    = 0.05;
-		imgui.theme.colour            = { 0.27, 0.17, 0.18 };
-		imgui.theme.accent_colour_0   = { 0.44, 0.23, 0.27 };
-		imgui.theme.accent_colour_1   = { 0.06, 0.2 , 0.21 };
-		imgui.theme.text_colour       = { 1.0 , 1.0 , 1.0  };
-		
 		// @ time
 		LARGE_INTEGER counter_frequency;
 		QueryPerformanceFrequency(&counter_frequency);
@@ -164,7 +151,9 @@ WinMain (HINSTANCE instance,
 			TranslateMessage(&message);
 			DispatchMessageA(&message);
 		    }
+
 		    windows_actions_update(window, window_width, window_height, &current_map, &previous_map);
+		    
 
 		    if(current_map.actions[ACTION_ESC].pressed) // should this be here?
 		    {
@@ -188,8 +177,14 @@ WinMain (HINSTANCE instance,
 			Sleep(target_ms - actual_ms);
 		    }
 		    SwapBuffers(window_dc); // @ show prepared frame
+		    
+
+		    
+		    
+		    
 
 		    previous_map = current_map;
+		    
 
 		    QueryPerformanceCounter(&counter_end);
 		    frame_ms = ((r32)(counter_end.QuadPart - counter_begin.QuadPart)/counter_frequency.QuadPart) * 1000;
