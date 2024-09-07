@@ -60,8 +60,12 @@ struct imgui_state
     imgui_item* current_item;
     s32 item_count;
 
+
+    // this is for editing values.
+    
     string text;
-    s32 text_cursor;
+    s32    text_cursor;
+    b32    text_active;
 };
 
 internal inline void* imgui_pushbuffer(imgui_state* imgui, s32 size)
@@ -269,8 +273,17 @@ b32 imgui_title(imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width, r
     }
     else if(pressed)
     {
-	if(item->active) imgui_set_deactive(imgui, item);  // de-activate, active, pressed 
-	else             imgui_set_active  (imgui, item);  //    activate, not active, pressed
+	if(item->active){
+	    imgui_set_deactive(imgui, item);  // de-activate, active, pressed
+	    
+	    imgui->text_active = false;
+	    imgui->text_cursor = 0;
+	    mem_clear(imgui->text.s, STRING_MAX_SIZE);
+	    
+	}
+	else{
+	    imgui_set_active  (imgui, item);  //    activate, not active, pressed
+	}
 
 	item->grabbed = false;
     }
@@ -375,17 +388,11 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
 {
     string value_string;
 
-    r32 temp = 0;
-    if(text)
-    {
-	temp = item->width * imgui->theme.text_padding;
-    }
-    else
-    {
-	temp = item->width * imgui->theme.value_padding;
-    }
+    r32 temp = item->width * imgui->theme.value_padding;
+
+    // convert current value to string in order to display. 
     
-    if(real)
+    if     (real)
     {
 	real_to_string(*real, value_string.s, &value_string.size, 1);
     }
@@ -407,41 +414,30 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
     }
     else if(text)
     {
-	value_string.size = STRING_MAX_SIZE;
-	mem_copy(text, value_string.s, STRING_MAX_SIZE);
+	value_string.size = string_size(text);
+	mem_copy(text, value_string.s, value_string.size);
+	temp = item->width * imgui->theme.text_padding;
     }
     else if(boolean)
     {
 	if(*boolean) value_string.size = string_print(value_string.s, "(TRUE)" );
 	else         value_string.size = string_print(value_string.s, "(FALSE)");
     }
-	    
-    // DRAW
-    
-    v3 inactive_colour = calc_darken(imgui->theme.text_colour, 0.3);
-	    
-    r32 text_height = 0;
-    r32 text_width  = 0;
-	    
-    r32 text_y = 0;
-    r32 text_x = x + temp;
 
-    graphics_primitive_metrics_text(imgui->primitive, value_string.s, value_string.size, &text_width, &text_height);
-    text_y = y + (height - text_height)/(r32)2;
-
-    // prevent overflow
-    // ...
-
-    r32 overflow = (width - ((x+temp) - x)) - text_width;
-    if(overflow < 0) text_x += overflow - (width * imgui->theme.label_padding);
-
-    graphics_primitive_set_zindex(imgui->primitive, 1);
-    graphics_primitive_set_colour(imgui->primitive, inactive_colour.r, inactive_colour.g, inactive_colour.b, 1.0);
-    graphics_primitive_render_text(imgui->primitive, value_string.s, value_string.size, vec2(text_x, text_y));
-    graphics_primitive_set_zindex(imgui->primitive, 0);
-
-    if(edit) //note: change value
+    if(edit)
     {
+	if(!imgui->text_active)
+	{
+	    // set temporary text to value string, move cursor.
+	    
+	    imgui->text = value_string;
+	    imgui->text_cursor = (value_string.size) ? value_string.size - 1 : 0;
+
+	    imgui->text_active = true;
+	}
+
+	// edit text.
+
 	if     (imgui->keymap->actions[ACTION_RARROW].pressed)    // MOVE CURSOR FORWARD
 	{
 	    imgui->text_cursor += ((imgui->text_cursor + 1) > IMGUI_MAX_FIELD_SIZE) ? 0 : 1;
@@ -499,10 +495,32 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
 	    
 	}
 	
-	// cursor box.
+	// draw temporary value.
 
-	// box and glyph (inverted colour.)
+	v3 inactive_colour = calc_darken(imgui->theme.text_colour, 0.3);
+	    
+	r32 text_height = 0;
+	r32 text_width  = 0;
+	    
+	r32 text_y = 0;
+	r32 text_x = x + temp;
+
+	graphics_primitive_metrics_text(imgui->primitive, imgui->text.s, imgui->text.size, &text_width, &text_height);
+	text_y = y + (height - text_height)/(r32)2;
+
+	// prevent overflow.
+
+	r32 overflow = (width - ((x+temp) - x)) - text_width;
+	if(overflow < 0) text_x += overflow - (width * imgui->theme.label_padding);
+
+	graphics_primitive_set_colour(imgui->primitive, inactive_colour.r, inactive_colour.g, inactive_colour.b, 1.0);
 	
+	graphics_primitive_set_zindex(imgui->primitive, 1);
+	graphics_primitive_render_text(imgui->primitive, imgui->text.s, imgui->text.size, vec2(text_x, text_y));
+	graphics_primitive_set_zindex(imgui->primitive, 0);
+
+	// draw cursor box.
+
 	rect uv_rect = { 0.0, 1.0, 0.0, 1.0 };
 	rect cursor_rect =
 	{
@@ -512,10 +530,37 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
 	    cursor_rect.y0 + height   
 	};
 	
-	graphics_primitive_set_colour(imgui->primitive, 1.0, 1.0, 1.0, 1.0); // ??? should this be part of the theme?
+	graphics_primitive_set_colour(imgui->primitive, 0.5, 0.5, 0.5, 1.0); // ??? should this be part of the theme?
 	graphics_primitive_set_texture(imgui->primitive, 0);
-	graphics_primitive_set_zindex(imgui->primitive, 1);
+	graphics_primitive_set_zindex(imgui->primitive, -1);
 	graphics_primitive_render_rect(imgui->primitive, cursor_rect, &uv_rect);
+	graphics_primitive_set_zindex(imgui->primitive, 0);
+	
+    }
+    else
+    {
+	// draw value.
+
+	v3 inactive_colour = calc_darken(imgui->theme.text_colour, 0.3);
+	    
+	r32 text_height = 0;
+	r32 text_width  = 0;
+	    
+	r32 text_y = 0;
+	r32 text_x = x + temp;
+
+	graphics_primitive_metrics_text(imgui->primitive, value_string.s, value_string.size, &text_width, &text_height);
+	text_y = y + (height - text_height)/(r32)2;
+
+	// prevent overflow.
+
+	r32 overflow = (width - ((x+temp) - x)) - text_width;
+	if(overflow < 0) text_x += overflow - (width * imgui->theme.label_padding);
+
+	graphics_primitive_set_colour(imgui->primitive, inactive_colour.r, inactive_colour.g, inactive_colour.b, 1.0);
+	
+	graphics_primitive_set_zindex(imgui->primitive, 1);
+	graphics_primitive_render_text(imgui->primitive, value_string.s, value_string.size, vec2(text_x, text_y));
 	graphics_primitive_set_zindex(imgui->primitive, 0);
     }
 }
@@ -539,12 +584,15 @@ imgui_item* imgui_x32   (imgui_state* imgui, imgui_item* parent, b32 enabled, r3
 	if     (real)        *(r32*)real        = string_to_real       (imgui->text.s);
 	else if(integer)     *(s32*)integer     = string_to_integer    (imgui->text.s);
 	else if(hexadecimal) *(u32*)hexadecimal = string_to_hexadecimal(imgui->text.s);
-	    
 	else if(text) mem_copy(imgui->text.s, text, STRING_MAX_SIZE);
+	
 
 	imgui_set_deactive(imgui, item);
 	    
-	imgui->text_cursor = 0; //note: this is incomplete, we need a better solution
+	//note: this is incomplete, we need a better solution
+	
+	imgui->text_active = false;
+	imgui->text_cursor = 0;
 	mem_clear(imgui->text.s, STRING_MAX_SIZE);
     }
 
@@ -735,7 +783,7 @@ b32  imgui_colour(imgui_state* imgui, imgui_item* parent, string label, r32 x, r
     }
     return(item->active);
 }
-b32 imgui_image (imgui_state* imgui, string label, GLuint image, r32 x, r32 y, r32 width, r32 height)
+b32  imgui_image (imgui_state* imgui, string label, GLuint image, r32 x, r32 y, r32 width, r32 height)
 {
     imgui_item* item = imgui_updateitem(imgui, imgui->current_item, label, x, y, width, height);
     if(item->parent)

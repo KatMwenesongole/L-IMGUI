@@ -8,7 +8,7 @@ internal void imgui_update(render_information_primitive* primitive, imgui_state*
     local s32 integer   = 12;
     local u32 hex       = 3735928559;
     local v3  vector3   = { 0.2, 0.3, 0.4 };
-    local s8  text[256] = {};
+    local s8  text[256] = { 'L', '-', 'I', 'M', 'G', 'U', 'I' };
 
     imgui_beginframe(imgui);
 
@@ -45,13 +45,13 @@ internal void imgui_update(render_information_primitive* primitive, imgui_state*
 	unnest(imgui);
     }
 
-    imgui_label (imgui, "a label",                    0.25, 6.5);
-    imgui_button(imgui, "a button",                   4.5, 6.5);
-    imgui_bool  (imgui, "a bool",           &boolean, 8.75,  6.5);
-    imgui_s32   (imgui, "a signed integer", &integer, true,0.25, 7.0);
-    imgui_r32   (imgui, "a real",           &real,    true,4.5, 7.0);
-    imgui_colour(imgui, "a colour",         &colour,  8.75,  7.0);
-    imgui_hex   (imgui, "a hexadecimal",    &hex,     true,0.25, 7.5);
-    imgui_v3    (imgui, "a vector 3",       &vector3, true,4.5, 7.5); 
-     
+    imgui_label (imgui, "a label",                          0.25, 6.5);
+    imgui_button(imgui, "a button",                         4.5,  6.5);
+    imgui_bool  (imgui, "a bool",           &boolean,       8.75, 6.5);
+    imgui_s32   (imgui, "a signed integer", &integer, true, 0.25, 7.0);
+    imgui_r32   (imgui, "a real",           &real,    true, 4.5,  7.0);
+    imgui_colour(imgui, "a colour",         &colour,        8.75, 7.0);
+    imgui_hex   (imgui, "a hexadecimal",    &hex,     true, 0.25, 7.5);
+    imgui_v3    (imgui, "a vector 3",       &vector3, true, 4.5,  7.5);
+    imgui_text  (imgui, "a text field",     text,     true, 8.75, 7.5);
 }
