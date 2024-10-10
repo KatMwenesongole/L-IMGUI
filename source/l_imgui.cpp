@@ -95,29 +95,53 @@ imgui_initialise(imgui_state* imgui, void* region_base, s32 region_size, render_
     
     // theme.
 
-    imgui->theme.bar_width         = 4.0; // default
-    imgui->theme.bar_height        = 0.35;
+    imgui->theme.bar_width         = 4.0f; // default
+    imgui->theme.bar_height        = 0.35f;
     
-    imgui->theme.cursor_width      = ((imgui->primitive->font.glyphs[0].spacing)/(r32)imgui->primitive->window_width)*16.0;
+    imgui->theme.cursor_width      = ((imgui->primitive->font.glyphs[0].spacing)/(r32)imgui->primitive->window_width)*16.0f;
     
-    imgui->theme.hierarchy_padding = 0.05;
-    imgui->theme.label_padding     = 0.02;
-    imgui->theme.text_padding      = 0.7;
-    imgui->theme.value_padding     = 0.7;
-    imgui->theme.margin_padding    = 0.05;
-    imgui->theme.colour            = { 0.27, 0.17, 0.18 };
-    imgui->theme.accent_colour_0   = { 0.44, 0.23, 0.27 };
-    imgui->theme.accent_colour_1   = { 0.06, 0.2 , 0.21 };
-    imgui->theme.text_colour       = { 1.0 , 1.0 , 1.0  };
+    imgui->theme.hierarchy_padding = 0.05f;
+    imgui->theme.label_padding     = 0.02f;
+    imgui->theme.text_padding      = 0.7f;
+    imgui->theme.value_padding     = 0.7f;
+    imgui->theme.margin_padding    = 0.05f;
+    imgui->theme.colour            = { 0.27f, 0.17f, 0.18f };
+    imgui->theme.accent_colour_0   = { 0.44f, 0.23f, 0.27f };
+    imgui->theme.accent_colour_1   = { 0.06f, 0.2f , 0.21f };
+    imgui->theme.text_colour       = { 1.0f , 1.0f , 1.0f  };
 
     // theme.
+
+    io_file file = io_readfile("p:/L-IMGUI/data/Ubuntu_36.font");
+    if(file.source)
+    {
+	font_header* header = (font_header*)file.source;
+
+	s8* source = (s8*)header + header->byte_offset;
+	s8* glyphs = (s8*)header + header->glyph_offset;
+
+	graphics_primitive_set_font_colour(&primitive->font, 1.0, 1.0, 1.0, 1.0);
+	graphics_primitive_set_font_texture(&primitive->font, opengl_texture_compile(source, header->width, header->height));
+	graphics_primitive_set_font_linespacing(&primitive->font, header->line_spacing);
+
+	for(s32 g = 0; g < header->glyph_count; g++)
+	{
+	    graphics_primitive_set_font_glyph(&primitive->font,
+					      ((glyph_header*)glyphs)[g].character,
+					      ((glyph_header*)glyphs)[g].width, ((glyph_header*)glyphs)[g].height,
+					      ((glyph_header*)glyphs)[g].offset,
+					      ((glyph_header*)glyphs)[g].spacing,((glyph_header*)glyphs)[g].pre_spacing,
+					      ((glyph_header*)glyphs)[g].u0, ((glyph_header*)glyphs)[g].v0, ((glyph_header*)glyphs)[g].u1, ((glyph_header*)glyphs)[g].v1);
+	}
+	io_freefile(file);
+    }
 }
 
 internal imgui_item*
 imgui_finditem(imgui_state* imgui, u32 hash)
 {
     imgui_item* item = imgui->root;
-    for(u32 i = 0; i < imgui->item_count; i++)
+    for(s32 i = 0; i < imgui->item_count; i++)
     {
 	if(hash == item->hash) return(item);
 	item += 1;
@@ -497,7 +521,7 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
 	
 	// draw temporary value.
 
-	v3 inactive_colour = calc_darken(imgui->theme.text_colour, 0.3);
+	v3 inactive_colour = calc_darken(imgui->theme.text_colour, 0.3f);
 	    
 	r32 text_height = 0;
 	r32 text_width  = 0;
@@ -541,7 +565,7 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
     {
 	// draw value.
 
-	v3 inactive_colour = calc_darken(imgui->theme.text_colour, 0.3);
+	v3 inactive_colour = calc_darken(imgui->theme.text_colour, 0.3f);
 	    
 	r32 text_height = 0;
 	r32 text_width  = 0;
@@ -732,6 +756,7 @@ b32  imgui_colour(imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 
 	// box & colomn
 
+	
 	rect box =
 	{
 	    popup_x + padding, popup_y + padding,
@@ -742,12 +767,30 @@ b32  imgui_colour(imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 	    popup_x + (2 * padding) + box_height, popup_y + padding,
 	    column.x0 + column_width, column.y0 + box_height
 	};
+
+	// triangle
+
+	triangle tri =
+	{
+	    popup_x + (popup_width/2), popup_y + padding,
+	    popup_x + (popup_width/4), popup_y + padding + box_height,
+	    popup_x + (3*popup_width/4), popup_y + padding + box_height,
+	};
+
 	graphics_primitive_set_zindex(imgui->primitive, 1);
 	graphics_primitive_set_colour(imgui->primitive, 0, 0, 0, 1.0);
 	graphics_primitive_set_texture(imgui->primitive, 0);
-	graphics_primitive_render_rect(imgui->primitive, box, 0);
-	graphics_primitive_render_rect(imgui->primitive, column, 0);
+	graphics_primitive_render_triangle(imgui->primitive, tri);
 	graphics_primitive_set_zindex(imgui->primitive, 0);
+	
+	/*
+	  graphics_primitive_set_zindex(imgui->primitive, 1);
+	  graphics_primitive_set_colour(imgui->primitive, 0, 0, 0, 1.0);
+	  graphics_primitive_set_texture(imgui->primitive, 0);
+	  graphics_primitive_render_rect(imgui->primitive, box, 0);
+	  graphics_primitive_render_rect(imgui->primitive, column, 0);
+	  graphics_primitive_set_zindex(imgui->primitive, 0);
+	*/
 
 	// r, g, b, a
 	{
