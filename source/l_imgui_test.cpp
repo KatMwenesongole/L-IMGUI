@@ -3,16 +3,16 @@ internal void imgui_update(render_information_primitive* primitive, imgui_state*
     graphics_set_backgroundcolour(112/(r32)255, 169/(r32)255, 161/(r32)255);
     
     local b32 boolean   = false;
-    local v4  colour    = { 1.0, 1.0, 1.0, 1.0 };
-    local r32 real      = 3.14159;
+    local v4  colour    = { 1.0f, 1.0f, 1.0f, 1.0f };
+    local r32 real      = 3.14159f;
     local s32 integer   = 12;
     local u32 hex       = 3735928559;
-    local v3  vector3   = { 0.2, 0.3, 0.4 };
+    local v3  vector3   = { 0.2f, 0.3f, 0.4f };
     local s8  text[256] = { 'L', '-', 'I', 'M', 'G', 'U', 'I' };
 
     imgui_beginframe(imgui);
 
-    if(imgui_label(imgui, "panel one", 0.3, 0.3, 4.0, 0.35))
+    if(imgui_label(imgui, "panel one", 0.3f, 0.3f, 4.0f, 0.35f))
     {
 	nest(imgui, "panel one");
 	
@@ -45,13 +45,13 @@ internal void imgui_update(render_information_primitive* primitive, imgui_state*
 	unnest(imgui);
     }
 
-    imgui_label (imgui, "a label",                          0.25, 6.5);
-    imgui_button(imgui, "a button",                         4.5,  6.5);
-    imgui_bool  (imgui, "a bool",           &boolean,       8.75, 6.5);
-    imgui_s32   (imgui, "a signed integer", &integer, true, 0.25, 7.0);
-    imgui_r32   (imgui, "a real",           &real,    true, 4.5,  7.0);
-    imgui_colour(imgui, "a colour",         &colour,        8.75, 7.0);
-    imgui_hex   (imgui, "a hexadecimal",    &hex,     true, 0.25, 7.5);
-    imgui_v3    (imgui, "a vector 3",       &vector3, true, 4.5,  7.5);
-    imgui_text  (imgui, "a text field",     text,     true, 8.75, 7.5);
+    imgui_label (imgui, "a label",                          0.25f, 6.5f);
+    imgui_button(imgui, "a button",                         4.5f,  6.5f);
+    imgui_bool  (imgui, "a bool",           &boolean,       8.75f, 6.5f);
+    imgui_s32   (imgui, "a signed integer", &integer, true, 0.25f, 7.0f);
+    imgui_r32   (imgui, "a real",           &real,    true, 4.5f,  7.0f);
+    imgui_colour(imgui, "a colour",         &colour,        8.75f, 7.0f);
+    imgui_hex   (imgui, "a hexadecimal",    &hex,     true, 0.25f, 7.5f);
+    imgui_v3    (imgui, "a vector 3",       &vector3, true, 4.5f,  7.5f);
+    imgui_text  (imgui, "a text field",     text,     true, 8.75f, 7.5f);
 }

@@ -150,16 +150,15 @@ imgui_finditem(imgui_state* imgui, u32 hash)
 }
 
 internal u32
-imgui_computehash  (s8* str)
+imgui_computehash(s8* str)
 {
     u32 hash = 0;
-    s8* p;
-
+    s8* p = str;
     for (p = str; *p != '\0'; p++)
     {
-	hash = 37 * hash + *p;
+	hash += (*p) ^ 37;
     }
-    return (hash); //note: hash % ARRAY_SIZE (hash table)
+    return(hash);
 }
 
 // TREE
@@ -235,15 +234,14 @@ imgui_mousestate(imgui_state* imgui, rect region, b32* pressed, b32* touched, b3
 
 imgui_item* imgui_updateitem(imgui_state* imgui, imgui_item* parent, string label, r32 x, r32 y, r32 width, r32 height)
 {
-    string hash_label;
-    if(parent) hash_label.size = string_print(hash_label.s, "%s#%i", label.s, parent->hash);
-    else hash_label = label;
+    u32 hash = imgui_computehash(label.s);
+    hash += (parent) ? parent->hash : 0;
     
-    imgui_item* item = imgui_finditem(imgui, imgui_computehash(hash_label.s));
+    imgui_item* item = imgui_finditem(imgui, hash);
     if(!item)
     {
 	item         = (imgui_item*)imgui_pushbuffer(imgui, sizeof(imgui_item));
-	item->hash   = imgui_computehash(hash_label.s);
+	item->hash   = hash;
 	item->parent = parent;
 
 	imgui->item_count++;
@@ -350,17 +348,10 @@ void imgui_advance(imgui_state* imgui, r32 y)
 
 void nest(imgui_state* imgui, string label) 
 {
-    string hash_label;
-    if(imgui->current_item)
-    {
-	hash_label.size = string_print(hash_label.s, "%s#%i", label.s, imgui->current_item->hash);
-    }
-    else
-    {
-	hash_label = label;
-    }
-
-    imgui_item* item = imgui_finditem(imgui, imgui_computehash(hash_label.s));
+    u32 hash = imgui_computehash(label.s);
+    hash += (imgui->current_item) ? imgui->current_item->hash : 0;
+    
+    imgui_item* item = imgui_finditem(imgui, hash);
     ASSERT(item)
     
     imgui->current_item = item;
@@ -1089,6 +1080,10 @@ b32 imgui_colour (imgui_state* imgui, string label, v4* vec, r32 x = 0, r32 y = 
     return(imgui_colour(imgui, imgui->current_item, label, x, y, width, height, vec));
 }
 
+//
+// imgui_space(imgui_state* imgui);
+// imgui_bitfield(imgui_state* imgui, s8 mask, b32* boolean);
+//
 
 void imgui_beginframe(imgui_state* imgui)
 {
