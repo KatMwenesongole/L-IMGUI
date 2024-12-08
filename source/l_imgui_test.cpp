@@ -8,6 +8,7 @@ internal void imgui_update(render_information_primitive* primitive, imgui_state*
     local s32 integer   = 12;
     local u32 hex       = 3735928559;
     local v3  vector3   = { 0.2f, 0.3f, 0.4f };
+    local v2  vector2   = { 0.5f, 0.6f };
     local s8  text[256] = { 'L', '-', 'I', 'M', 'G', 'U', 'I' };
 
     imgui_beginframe(imgui);
@@ -39,8 +40,11 @@ internal void imgui_update(render_information_primitive* primitive, imgui_state*
 	imgui_r32   (imgui, "item real",           &real);
 	imgui_s32   (imgui, "item signed integer", &integer);
 	imgui_hex   (imgui, "item hexadecimal",    &hex);
+	imgui_space (imgui);
 	imgui_v3    (imgui, "item vector 3",       &vector3);
+	imgui_v2    (imgui, "item vector 2",       &vector2);
 	imgui_text  (imgui, "item text",           text);
+	imgui_space (imgui);
 	
 	unnest(imgui);
     }

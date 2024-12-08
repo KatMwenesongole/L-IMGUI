@@ -319,6 +319,7 @@ b32 imgui_title(imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width, r
     // draw.
 
     // background.
+    graphics_primitive_set_zindex(imgui->primitive, -1);
     graphics_primitive_set_texture(imgui->primitive, 0);
     graphics_primitive_set_colour(imgui->primitive, background_colour.r, background_colour.g, background_colour.b, 1.0);
     graphics_primitive_render_rect(imgui->primitive, item_rect, 0);
@@ -368,6 +369,7 @@ void unnest(imgui_state* imgui)
 	imgui->current_item->x + imgui->current_item->width - (imgui->current_item->width * imgui->theme.hierarchy_padding),
 	imgui->current_item->child_y };
 
+    graphics_primitive_set_zindex(imgui->primitive, -1);
     graphics_primitive_render_rect(imgui->primitive, vertex_rect, 0);
     
 
@@ -399,7 +401,7 @@ void unnest(imgui_state* imgui)
 }
 
 // internal.
-void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width, r32 height, b32 edit, r32* real, s32* integer, u32* hexadecimal, v3* vec3, v4* vec4, s8* text, b32* boolean)
+void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width, r32 height, b32 edit, r32* real, s32* integer, u32* hexadecimal, iv2* ivector2, v2* vector2, v3* vector3, v4* vector4, s8* text, b32* boolean)
 {
     string value_string;
 
@@ -419,13 +421,21 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
     {
 	hex_to_string(*hexadecimal, value_string.s, &value_string.size);
     }
-    else if(vec3)
+    else if(ivector2)
     {
-	value_string.size = string_print(value_string.s, "(%r, %r, %r)", vec3->x, vec3->y, vec3->z);
+	value_string.size = string_print(value_string.s, "(%i, %i)", ivector2->x, ivector2->y);
     }
-    else if(vec4)
+    else if(vector2)
     {
-	value_string.size = string_print(value_string.s, "(%r, %r, %r, %r)", vec4->x, vec4->y, vec4->z, vec4->w);
+	value_string.size = string_print(value_string.s, "(%r, %r)", vector2->x, vector2->y);
+    }
+    else if(vector3)
+    {
+	value_string.size = string_print(value_string.s, "(%r, %r, %r)", vector3->x, vector3->y, vector3->z);
+    }
+    else if(vector4)
+    {
+	value_string.size = string_print(value_string.s, "(%r, %r, %r, %r)", vector4->x, vector4->y, vector4->z, vector4->w);
     }
     else if(text)
     {
@@ -438,7 +448,7 @@ void imgui_value (imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width,
 	if(*boolean) value_string.size = string_print(value_string.s, "(TRUE)" );
 	else         value_string.size = string_print(value_string.s, "(FALSE)");
     }
-
+    
     if(edit)
     {
 	if(!imgui->text_active)
@@ -613,12 +623,12 @@ imgui_item* imgui_x32   (imgui_state* imgui, imgui_item* parent, b32 enabled, r3
 
     if(enabled)
     {
-	if(item->active) imgui_value(imgui, item, item->x, item->y, item->width, item->height, true,  real, integer, hexadecimal, 0, 0, text, 0);    
-	else             imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, real, integer, hexadecimal, 0, 0, text, 0);
+	if(item->active) imgui_value(imgui, item, item->x, item->y, item->width, item->height, true,  real, integer, hexadecimal, 0, 0, 0, 0, text, 0);    
+	else             imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, real, integer, hexadecimal, 0, 0, 0, 0, text, 0);
     }
     else
     {
-	imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, real, integer, hexadecimal, 0, 0, text, 0);
+	imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, real, integer, hexadecimal, 0, 0, 0, 0, text, 0);
     }
 	
     return(item);
@@ -676,7 +686,7 @@ b32  imgui_bool  (imgui_state* imgui, imgui_item* parent, string label, r32 x, r
     item->active = false;
 
     // value:
-    imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, 0, 0, 0, 0, 0, 0, boolean);
+    imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, 0, 0, 0, 0, 0, 0, 0, 0, boolean);
 
     if(item->parent)
     {
@@ -979,7 +989,7 @@ b32 imgui_v3    (imgui_state* imgui, string label, v3* vector3,  b32 enabled = t
     }
 
     imgui_title(imgui, item, item->x, item->y, item->width, item->height, label); // title.
-    imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, 0, 0, 0, vector3, 0, 0, 0); // value.
+    imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, 0, 0, 0, 0, 0, vector3, 0, 0, 0); // value.
 
     if(item->parent) imgui_advance(imgui, item->height);
     
@@ -994,8 +1004,123 @@ b32 imgui_v3    (imgui_state* imgui, string label, v3* vector3,  b32 enabled = t
     
     return(item->active);
 }
+b32 imgui_v2    (imgui_state* imgui, string label, v2* vector2,  b32 enabled = true, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0)
+{
+    // standard.
+    if(x < 1E-15)
+    {
+	x = (imgui->current_item) ? imgui->current_item->x + (imgui->current_item->width * imgui->theme.hierarchy_padding) : x;
+    }
+    if(y < 1E-15)
+    {
+	y = (imgui->current_item) ? imgui->current_item->child_y : y;
+    }
+    if(width < 1E-15)
+    {
+	width = (imgui->current_item) ? imgui->current_item->width - (imgui->current_item->width * imgui->theme.hierarchy_padding) : imgui->theme.bar_width;
+    }
+    if(height < 1E-15)
+    {
+	height = (imgui->current_item) ? imgui->current_item->height : imgui->theme.bar_height;
+    }
+    
+    imgui_item* item = imgui_updateitem(imgui, imgui->current_item, label, x, y, width, height);
 
-b32 imgui_label  (imgui_state* imgui, string label, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0) {
+    if(item->parent)
+    {
+	item->x = x;
+	item->y = y;
+    }
+
+    imgui_title(imgui, item, item->x, item->y, item->width, item->height, label); // title.
+    imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, 0, 0, 0, 0, vector2, 0, 0, 0, 0); // value.
+
+    if(item->parent) imgui_advance(imgui, item->height);
+    
+    if(item->active)
+    {
+	nest(imgui, label);
+	imgui_r32(imgui, "x", &vector2->x);
+	imgui_r32(imgui, "y", &vector2->y);
+	unnest(imgui);
+    }
+    
+    return(item->active);
+}
+b32 imgui_iv2    (imgui_state* imgui, string label, iv2* ivector2,  b32 enabled = true, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0)
+{
+    // standard.
+    if(x < 1E-15)
+    {
+	x = (imgui->current_item) ? imgui->current_item->x + (imgui->current_item->width * imgui->theme.hierarchy_padding) : x;
+    }
+    if(y < 1E-15)
+    {
+	y = (imgui->current_item) ? imgui->current_item->child_y : y;
+    }
+    if(width < 1E-15)
+    {
+	width = (imgui->current_item) ? imgui->current_item->width - (imgui->current_item->width * imgui->theme.hierarchy_padding) : imgui->theme.bar_width;
+    }
+    if(height < 1E-15)
+    {
+	height = (imgui->current_item) ? imgui->current_item->height : imgui->theme.bar_height;
+    }
+    
+    imgui_item* item = imgui_updateitem(imgui, imgui->current_item, label, x, y, width, height);
+
+    if(item->parent)
+    {
+	item->x = x;
+	item->y = y;
+    }
+
+    imgui_title(imgui, item, item->x, item->y, item->width, item->height, label); // title.
+    imgui_value(imgui, item, item->x, item->y, item->width, item->height, false, 0, 0, 0, ivector2, 0, 0, 0, 0, 0); // value.
+
+    if(item->parent) imgui_advance(imgui, item->height);
+    
+    if(item->active)
+    {
+	nest(imgui, label);
+	imgui_s32(imgui, "x", &ivector2->x);
+	imgui_s32(imgui, "y", &ivector2->y);
+	unnest(imgui);
+    }
+    
+    return(item->active);
+}
+
+void imgui_space(imgui_state* imgui, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0)
+{
+    // standard.
+    if(x < 1E-15)
+    {
+	x = (imgui->current_item) ? imgui->current_item->x + (imgui->current_item->width * imgui->theme.hierarchy_padding) : x;
+    }
+    if(y < 1E-15)
+    {
+	y = (imgui->current_item) ? imgui->current_item->child_y : y;
+    }
+    if(width < 1E-15)
+    {
+	width = (imgui->current_item) ? imgui->current_item->width - (imgui->current_item->width * imgui->theme.hierarchy_padding) : imgui->theme.bar_width;
+    }
+    if(height < 1E-15)
+    {
+	height = (imgui->current_item) ? imgui->current_item->height : imgui->theme.bar_height;
+    }
+
+    // render.
+    rect item_rect = { x, y, x + width, y + height };
+    graphics_primitive_set_zindex(imgui->primitive, -1);
+    graphics_primitive_set_texture(imgui->primitive, 0);
+    graphics_primitive_set_colour(imgui->primitive, imgui->theme.colour.r, imgui->theme.colour.g, imgui->theme.colour.b, 1.0);
+    graphics_primitive_render_rect(imgui->primitive, item_rect, 0);
+    imgui_advance(imgui, height);
+}
+
+b32 imgui_label    (imgui_state* imgui, string label, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0) {
 
     // standard.
     if(x < 1E-15)
@@ -1016,7 +1141,7 @@ b32 imgui_label  (imgui_state* imgui, string label, r32 x = 0, r32 y = 0, r32 wi
     }
     return(imgui_label(imgui, imgui->current_item, label, x, y, width, height));
 }
-b32 imgui_button (imgui_state* imgui, string label, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0) {
+b32 imgui_button   (imgui_state* imgui, string label, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0) {
     
     // standard.
     if(x < 1E-15)
@@ -1037,7 +1162,7 @@ b32 imgui_button (imgui_state* imgui, string label, r32 x = 0, r32 y = 0, r32 wi
     }
     return(imgui_button(imgui, imgui->current_item, label, x, y, width, height));
 }
-b32 imgui_bool (imgui_state* imgui, string label, b32* boolean, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0) {
+b32 imgui_bool     (imgui_state* imgui, string label, b32* boolean, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0) {
     
     // standard.
     if(x < 1E-15)
@@ -1058,7 +1183,7 @@ b32 imgui_bool (imgui_state* imgui, string label, b32* boolean, r32 x = 0, r32 y
     }
     return(imgui_bool(imgui, imgui->current_item, label, x, y, width, height, boolean));
 }
-b32 imgui_colour (imgui_state* imgui, string label, v4* vec, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0) {
+b32 imgui_colour   (imgui_state* imgui, string label, v4* vec, r32 x = 0, r32 y = 0, r32 width = 0, r32 height = 0) {
     
     // standard.
     if(x < 1E-15)
@@ -1080,10 +1205,7 @@ b32 imgui_colour (imgui_state* imgui, string label, v4* vec, r32 x = 0, r32 y = 
     return(imgui_colour(imgui, imgui->current_item, label, x, y, width, height, vec));
 }
 
-//
-// imgui_space(imgui_state* imgui);
-// imgui_bitfield(imgui_state* imgui, s8 mask, b32* boolean);
-//
+// imgui_bitfield(imgui_state* imgui, s8* mask); 
 
 void imgui_beginframe(imgui_state* imgui)
 {
