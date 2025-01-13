@@ -4,6 +4,12 @@
 // SELECT  - LEFT  MOUSE (CLICK) 
 //
 
+//
+// There is a bug with bool
+//
+// I want to add an inline shader for the colour picker.
+//
+
 #define IMGUI_MAX_FIELD_SIZE 256 
 
 struct imgui_item
@@ -60,7 +66,14 @@ struct imgui_state
     imgui_item* current_item;
     s32 item_count;
 
+    // colour picker
 
+    GLuint imgui_colour_shader_h;
+    GLuint imgui_colour_shader_sl;
+
+    v3 imgui_colour_hsl;
+    v3 imgui_colour_rgb;
+    
     // this is for editing values.
     
     string text;
@@ -83,6 +96,101 @@ internal inline void* imgui_pushbuffer(imgui_state* imgui, s32 size)
 internal void
 imgui_initialise(imgui_state* imgui, void* region_base, s32 region_size, render_information_primitive* primitive, action_map* keymap)
 {
+    const s8 imgui_colour_shader_vert[] =
+    "#version 330 core\n"
+    "layout (location = 0) in vec3  in_vertex;\n"
+    "layout (location = 1) in vec2  in_uv;\n"
+    "uniform float z_index;\n"
+    "out vec2 uv;\n"
+    "void main()\n"
+    "{\n"
+    "	uv          = in_uv;\n"
+    "	gl_Position = vec4(in_vertex.x, in_vertex.y, z_index, 1.0);\n"
+    "}\n";
+
+    const s8 imgui_colour_shader_h_frag[] =
+    "#version 330 core\n"
+    "in vec2 uv;\n"
+    "void main()\n"
+    "{\n"
+    "vec3 hue = vec3(1.0, 1.0, 1.0);"
+    "float norm = 1.0;"
+    "float interval = 1.0/6.0;"
+    "if     (uv.y < interval){"
+    "float norm = uv.y/interval;"
+    "hue = vec3(1.0, norm, 0);"
+    "}"
+    "else if(uv.y < 2*interval){"
+    "norm = (uv.y-interval)/interval;"
+    "hue = vec3(1.0-norm, 1.0, 0);"
+    "}"
+    "else if(uv.y < 3*interval){"
+    "norm = (uv.y-(2*interval))/interval;"
+    "hue = vec3(0, 1.0, norm);"
+    "}"
+    "else if(uv.y < 4*interval){"
+    "norm = (uv.y-(3*interval))/interval;"
+    "hue = vec3(0, 1.0-norm, 1.0);"
+    "}"
+    "else if(uv.y < 5*interval){"
+    "norm = (uv.y-(4*interval))/interval;"
+    "hue = vec3(norm, 0, 1.0);"
+    "}"
+    "else{"
+    "norm = (uv.y-(5*interval))/interval;"
+    "hue = vec3(1.0, 0, 1.0-norm);"
+    "}"
+    "gl_FragColor = vec4(hue, 1.0);\n"
+    "}\n";
+
+    const s8 imgui_colour_shader_sl_frag[] =
+    "#version 330 core\n"
+    "in vec2 uv;\n"
+    "uniform vec4 colour;\n"
+    "void main()\n"
+    "{\n"
+    "float h = colour.r/60.0;"
+    "float s = uv.x;"
+    "float l = uv.y - (s*0.5);"
+    "float chroma = (1 - (2*l - 1))*s;"
+    "float x = chroma * (1 - abs(mod(h,2) - 1));"
+    "float m = (l - chroma)/2;"
+    "vec3 rgb = vec3(1.0, 1.0, 1.0);"
+    "if     (h < 1){"
+    "rgb = vec3(chroma, x, 0);"
+    "}"
+    "else if(h < 2){"
+    "rgb = vec3(x, chroma, 0);"
+    "}"
+    "else if(h < 3){"
+    "rgb = vec3(0, chroma, x);"
+    "}"
+    "else if(h < 4){"
+    "rgb = vec3(0, x, chroma);"
+    "}"
+    "else if(h < 5){"
+    "rgb = vec3(x, 0, chroma);"
+    "}"
+    "else{"
+    "rgb = vec3(chroma, 0, x);"
+    "}"
+    "rgb.r = rgb.r + m;"
+    "rgb.g = rgb.g + m;"
+    "rgb.b = rgb.b + m;"
+    "gl_FragColor = vec4(rgb, 1.0);\n"
+    "}\n";
+
+    imgui->imgui_colour_shader_h = opengl_shader_compile_program(
+	opengl_shader_compile_vertex  ((s8*)imgui_colour_shader_vert,     sizeof(imgui_colour_shader_vert)),
+	opengl_shader_compile_fragment((s8*)imgui_colour_shader_h_frag, sizeof(imgui_colour_shader_h_frag)));
+    ASSERT(imgui->imgui_colour_shader_h);
+    
+    imgui->imgui_colour_shader_sl = opengl_shader_compile_program(
+	opengl_shader_compile_vertex  ((s8*)imgui_colour_shader_vert,     sizeof(imgui_colour_shader_vert)),
+	opengl_shader_compile_fragment((s8*)imgui_colour_shader_sl_frag, sizeof(imgui_colour_shader_sl_frag)));
+    ASSERT(imgui->imgui_colour_shader_sl);
+
+    
     imgui->keymap = keymap;
 
     imgui->primitive = primitive;
@@ -120,7 +228,7 @@ imgui_initialise(imgui_state* imgui, void* region_base, s32 region_size, render_
 	s8* source = (s8*)header + header->byte_offset;
 	s8* glyphs = (s8*)header + header->glyph_offset;
 
-	graphics_primitive_set_font_colour(&primitive->font, 1.0, 1.0, 1.0, 1.0);
+	graphics_primitive_set_colour(primitive, 1.0, 1.0, 1.0, 1.0);
 	graphics_primitive_set_font_texture(&primitive->font, opengl_texture_compile(source, header->width, header->height));
 	graphics_primitive_set_font_linespacing(&primitive->font, header->line_spacing);
 
@@ -219,15 +327,15 @@ imgui_mousestate(imgui_state* imgui, rect region, b32* pressed, b32* touched, b3
     {
 	if(imgui->keymap->actions[ACTION_LMOUSE].pressed)
 	{
-	    *pressed  = true;
+	    if(pressed) { *pressed  = true; }
 	}
 	else if(imgui->keymap->actions[ACTION_RMOUSE].holding)
 	{
-	    *grabbed = true;
+	    if(grabbed) { *grabbed = true; }
 	}
 	else
 	{
-	    *touched = true;
+	    if(touched) { *touched = true; }
 	}
     }
 }
@@ -300,7 +408,7 @@ b32 imgui_title(imgui_state* imgui, imgui_item* item, r32 x, r32 y, r32 width, r
 	    
 	    imgui->text_active = false;
 	    imgui->text_cursor = 0;
-	    mem_clear(imgui->text.s, STRING_MAX_SIZE);
+	    mem_clear(imgui->text.s, HANDMADE_STRING_LARGE);
 	    
 	}
 	else{
@@ -609,7 +717,7 @@ imgui_item* imgui_x32   (imgui_state* imgui, imgui_item* parent, b32 enabled, r3
 	if     (real)        *(r32*)real        = string_to_real       (imgui->text.s);
 	else if(integer)     *(s32*)integer     = string_to_integer    (imgui->text.s);
 	else if(hexadecimal) *(u32*)hexadecimal = string_to_hexadecimal(imgui->text.s);
-	else if(text) mem_copy(imgui->text.s, text, STRING_MAX_SIZE);
+	else if(text) mem_copy(imgui->text.s, text, HANDMADE_STRING_LARGE);
 	
 
 	imgui_set_deactive(imgui, item);
@@ -618,7 +726,7 @@ imgui_item* imgui_x32   (imgui_state* imgui, imgui_item* parent, b32 enabled, r3
 	
 	imgui->text_active = false;
 	imgui->text_cursor = 0;
-	mem_clear(imgui->text.s, STRING_MAX_SIZE);
+	mem_clear(imgui->text.s, HANDMADE_STRING_LARGE);
     }
 
     if(enabled)
@@ -746,7 +854,9 @@ b32  imgui_colour(imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 	}
 
 	// background (upper section, without the buttons.)
-	    
+
+	glDisable(GL_DEPTH_TEST);
+	
 	rect background = {
 	    popup_x, popup_y,
 	    background.x0 + popup_width, background.y0 + popup_height
@@ -756,7 +866,6 @@ b32  imgui_colour(imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 	graphics_primitive_render_rect(imgui->primitive, background, 0);
 
 	// box & colomn
-
 	
 	rect box =
 	{
@@ -769,33 +878,95 @@ b32  imgui_colour(imgui_state* imgui, imgui_item* parent, string label, r32 x, r
 	    column.x0 + column_width, column.y0 + box_height
 	};
 
-	// triangle
-
-	triangle tri =
-	{
-	    popup_x + (popup_width/2), popup_y + padding,
-	    popup_x + (popup_width/4), popup_y + padding + box_height,
-	    popup_x + (3*popup_width/4), popup_y + padding + box_height,
-	};
-
-	graphics_primitive_set_zindex(imgui->primitive, 1);
-	graphics_primitive_set_colour(imgui->primitive, 0, 0, 0, 1.0);
-	graphics_primitive_set_texture(imgui->primitive, 0);
-	graphics_primitive_render_triangle(imgui->primitive, tri);
-	graphics_primitive_set_zindex(imgui->primitive, 0);
+	rect uv_rect = { 0.0, 1.0, 1.0, 0.0 };
 	
-	/*
-	  graphics_primitive_set_zindex(imgui->primitive, 1);
-	  graphics_primitive_set_colour(imgui->primitive, 0, 0, 0, 1.0);
-	  graphics_primitive_set_texture(imgui->primitive, 0);
-	  graphics_primitive_render_rect(imgui->primitive, box, 0);
-	  graphics_primitive_render_rect(imgui->primitive, column, 0);
-	  graphics_primitive_set_zindex(imgui->primitive, 0);
-	*/
+	graphics_primitive_set_zindex(imgui->primitive, 0);
+	graphics_primitive_set_texture(imgui->primitive, 0);
+	graphics_primitive_set_colour(imgui->primitive, imgui->imgui_colour_hsl.x, 0, 0, 1.0);
+	graphics_primitive_set_shader(imgui->primitive, imgui->imgui_colour_shader_sl);
+	graphics_primitive_render_rect(imgui->primitive, box, &uv_rect);
+	graphics_primitive_set_shader(imgui->primitive, imgui->primitive->primitive_shader);
+
+	graphics_primitive_set_shader(imgui->primitive, imgui->imgui_colour_shader_h);
+	graphics_primitive_render_rect(imgui->primitive, column, &uv_rect);
+	graphics_primitive_set_shader(imgui->primitive, imgui->primitive->primitive_shader);
+	graphics_primitive_set_zindex(imgui->primitive, 0);
+
+	// saturation / lightness selector.
+	
+	b32 touched_saturation_lightness = false;
+	imgui_mousestate(imgui, box, &touched_saturation_lightness, 0, 0); // check interaction.
+	local v2 sl_position = { box.x0 + (box_height/2), box.y0 + (box_height/2) };
+	if(touched_saturation_lightness)
+	{
+	    if(imgui->keymap->actions[ACTION_LMOUSE].down)
+	    {
+	    sl_position = { imgui->keymap->mouse_position.x, imgui->keymap->mouse_position.y };
+	    }
+	}
+
+	circle c0 = { sl_position.x, sl_position.y, 0.14f };
+	circle c1 = { sl_position.x, sl_position.y, 0.12f };
+	
+	graphics_primitive_set_colour(imgui->primitive, 1.0, 1.0, 1.0, 1.0);
+	graphics_primitive_render_circle(imgui->primitive, c0);
+	graphics_primitive_set_colour(imgui->primitive, imgui->imgui_colour_rgb.r, imgui->imgui_colour_rgb.g, imgui->imgui_colour_rgb.b, 1.0);
+	graphics_primitive_render_circle(imgui->primitive, c1);
+
+	// hue selector.
+	
+	b32 touched_hue = false;
+
+	imgui_mousestate(imgui, column, &touched_hue, 0, 0); // check interaction.
+
+	local v2 h_position = { column.x0, column.y0 + box_height/2 };
+	if(touched_hue)
+	{
+	    if(imgui->keymap->actions[ACTION_LMOUSE].down)
+	    {
+	    h_position = { imgui->keymap->mouse_position.x, imgui->keymap->mouse_position.y };
+	    }
+	}
+
+	triangle tri = {
+	    column.x0-0.075,        h_position.y - 0.1,
+	    column.x0-0.075,        h_position.y + 0.1,
+	    column.x0-0.075 + 0.15, h_position.y};
+	
+	graphics_primitive_set_colour(imgui->primitive, 1.0, 1.0, 1.0, 1.0); 
+	graphics_primitive_render_triangle(imgui->primitive, tri);
+
+	// calculate.
+
+	imgui->imgui_colour_hsl.x = calc_lerp(h_position.y, column.y0, column.y1) * 360;                        // h
+	imgui->imgui_colour_hsl.y = 1.0 - calc_lerp(sl_position.x, box.x0, box.x1);                             // s
+	imgui->imgui_colour_hsl.z = calc_lerp(sl_position.y, box.y0, box.y1) - (imgui->imgui_colour_hsl.y*0.5); // l
+
+	r32 h = imgui->imgui_colour_hsl.x/60.0;
+	
+	r32 c = (1 - (2*imgui->imgui_colour_hsl.z - 1))*imgui->imgui_colour_hsl.y;
+	r32 x = c * (1 - fabs(fmodf(h,2) - 1));
+	r32 m = (imgui->imgui_colour_hsl.z - c)/2;
+
+	if     (h < 1) { imgui->imgui_colour_rgb = { c, x, 0 }; }
+	else if(h < 2) { imgui->imgui_colour_rgb = { x, c, 0 }; }
+	else if(h < 3) { imgui->imgui_colour_rgb = { 0, c, x }; }
+	else if(h < 4) { imgui->imgui_colour_rgb = { 0, x, c }; }
+	else if(h < 5) { imgui->imgui_colour_rgb = { x, 0, c }; }
+	else           { imgui->imgui_colour_rgb = { c, 0, x }; }
+	imgui->imgui_colour_rgb.r += m;
+	imgui->imgui_colour_rgb.g += m;
+	imgui->imgui_colour_rgb.b += m;
+
+	// calculate.
+
+
+	glEnable(GL_DEPTH_TEST);
 
 	// r, g, b, a
 	{
 	    local v4 colour = { 1.0, 1.0, 1.0, 1.0 };
+	    colour = { imgui->imgui_colour_rgb.r, imgui->imgui_colour_rgb.g, imgui->imgui_colour_rgb.b };
 	    
 	    imgui_x32(imgui, item, true, popup_x, background.y1,                      popup_width, item->height, "R", &colour.r, 0, 0, 0);
 	    imgui_x32(imgui, item, true, popup_x, background.y1 + item->height,       popup_width, item->height, "G", &colour.g, 0, 0, 0);

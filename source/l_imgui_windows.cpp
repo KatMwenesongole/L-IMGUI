@@ -39,7 +39,7 @@ WinMain (HINSTANCE      instance,
     windows_information info = {};
     
     if(windows_initialise_window(&info, instance, windows_procedure_messages, 1920, 1080,
-	                         "Lightweight Immediate Mode Graphical User Interface (L-IMGUI)"))
+	                         "Lightweight Immediate Mode Graphical User Interface (L-IMGUI) - DEMO"))
     {
 	// input.
 	action_map current_map  = {};
@@ -47,7 +47,10 @@ WinMain (HINSTANCE      instance,
 	
 	// @ graphics
 	render_information_primitive primitive = {};
-	graphics_primitives_initialise(&primitive, info.window_width, info.window_height);
+	primitive.window_width = info.window_width;
+	primitive.window_height = info.window_height;
+	
+	graphics_2d_initialise(&primitive);
 
 	// @ font
 	io_file file = io_readfile("../data/Ubuntu_36.font");
@@ -58,7 +61,6 @@ WinMain (HINSTANCE      instance,
 	    s8* source = (s8*)header + header->byte_offset;
 	    s8* glyphs = (s8*)header + header->glyph_offset;
 
-	    graphics_primitive_set_font_colour(&primitive.font, 1.0, 1.0, 1.0, 1.0);
 	    graphics_primitive_set_font_texture(&primitive.font, opengl_texture_compile(source, header->width, header->height));
 	    graphics_primitive_set_font_linespacing(&primitive.font, header->line_spacing);
 
@@ -116,7 +118,7 @@ WinMain (HINSTANCE      instance,
 
 	    // begin program.
 
-	    imgui_update(&primitive, &imgui);
+	    imgui_test(&primitive, &imgui);
 
 	    // end program.
 	    
